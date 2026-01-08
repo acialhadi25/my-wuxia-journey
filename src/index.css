@@ -1,0 +1,269 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Noto+Serif:ital,wght@0,400;0,500;0,600;1,400&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Wuxia Dark Theme - Ink Wash Aesthetic */
+    --background: 220 20% 6%;
+    --foreground: 40 20% 90%;
+
+    --card: 220 18% 10%;
+    --card-foreground: 40 20% 90%;
+
+    --popover: 220 18% 8%;
+    --popover-foreground: 40 20% 90%;
+
+    /* Gold - Cultivation Power */
+    --primary: 42 85% 55%;
+    --primary-foreground: 220 20% 6%;
+
+    /* Muted Jade */
+    --secondary: 170 25% 18%;
+    --secondary-foreground: 170 30% 75%;
+
+    /* Deep Charcoal */
+    --muted: 220 15% 15%;
+    --muted-foreground: 220 10% 55%;
+
+    /* Crimson Blood */
+    --accent: 0 70% 45%;
+    --accent-foreground: 40 20% 95%;
+
+    --destructive: 0 75% 50%;
+    --destructive-foreground: 40 20% 95%;
+
+    --border: 220 15% 18%;
+    --input: 220 15% 15%;
+    --ring: 42 85% 55%;
+
+    --radius: 0.75rem;
+
+    /* Custom Wuxia Colors */
+    --ink: 220 20% 8%;
+    --ink-light: 220 15% 20%;
+    --jade: 170 35% 40%;
+    --jade-glow: 170 40% 50%;
+    --blood: 0 70% 45%;
+    --blood-dark: 0 65% 30%;
+    --gold: 42 85% 55%;
+    --gold-pale: 42 60% 75%;
+    --mist: 220 10% 70%;
+    --spirit: 260 40% 50%;
+
+    /* Gradients */
+    --gradient-ink: linear-gradient(180deg, hsl(220 20% 6%) 0%, hsl(220 18% 12%) 100%);
+    --gradient-gold: linear-gradient(135deg, hsl(42 85% 55%) 0%, hsl(35 90% 45%) 100%);
+    --gradient-blood: linear-gradient(135deg, hsl(0 70% 45%) 0%, hsl(350 60% 35%) 100%);
+    --gradient-mist: linear-gradient(180deg, hsla(220 15% 20% / 0) 0%, hsla(220 15% 20% / 0.8) 100%);
+    --gradient-spirit: linear-gradient(135deg, hsl(260 40% 50%) 0%, hsl(280 35% 40%) 100%);
+
+    /* Shadows */
+    --shadow-ink: 0 4px 20px -4px hsla(220 20% 0% / 0.5);
+    --shadow-gold: 0 0 30px hsla(42 85% 55% / 0.3);
+    --shadow-blood: 0 0 20px hsla(0 70% 45% / 0.4);
+
+    /* Animation Timing */
+    --ease-wuxia: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .dark {
+    --background: 220 20% 6%;
+    --foreground: 40 20% 90%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Noto Serif', serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Cinzel', serif;
+  }
+}
+
+@layer components {
+  .ink-wash-bg {
+    background: var(--gradient-ink);
+    position: relative;
+  }
+
+  .ink-wash-bg::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: 
+      radial-gradient(ellipse at 20% 30%, hsla(170 35% 40% / 0.05) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 70%, hsla(42 85% 55% / 0.03) 0%, transparent 50%);
+    pointer-events: none;
+  }
+
+  .text-gold-gradient {
+    background: var(--gradient-gold);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .glow-gold {
+    box-shadow: var(--shadow-gold);
+  }
+
+  .glow-blood {
+    box-shadow: var(--shadow-blood);
+  }
+
+  .mist-overlay {
+    background: var(--gradient-mist);
+  }
+
+  .brush-stroke {
+    position: relative;
+  }
+
+  .brush-stroke::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent 0%, hsl(var(--primary)) 20%, hsl(var(--primary)) 80%, transparent 100%);
+    opacity: 0.6;
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Mobile Safe Area Support */
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  .safe-area-left {
+    padding-left: env(safe-area-inset-left);
+  }
+  
+  .safe-area-right {
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Touch Optimization */
+  .touch-manipulation {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .text-shadow-ink {
+    text-shadow: 0 2px 10px hsla(220 20% 0% / 0.8);
+  }
+
+  .animate-mist {
+    animation: mist-float 8s ease-in-out infinite;
+  }
+
+  .animate-pulse-slow {
+    animation: pulse-slow 3s ease-in-out infinite;
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.6s var(--ease-wuxia) forwards;
+  }
+
+  .animate-slide-up {
+    animation: slide-up 0.5s var(--ease-wuxia) forwards;
+  }
+
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+
+  .animate-typewriter {
+    overflow: hidden;
+    border-right: 2px solid hsl(var(--primary));
+    white-space: nowrap;
+    animation: 
+      typewriter 2s steps(40, end),
+      blink-caret 0.75s step-end infinite;
+  }
+
+  .border-l-3 {
+    border-left-width: 3px;
+  }
+}
+
+@keyframes mist-float {
+  0%, 100% { opacity: 0.3; transform: translateX(0) translateY(0); }
+  50% { opacity: 0.5; transform: translateX(10px) translateY(-5px); }
+}
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(45deg); }
+  50% { transform: translateY(-10px) rotate(45deg); }
+}
+
+@keyframes typewriter {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+@keyframes blink-caret {
+  from, to { border-color: transparent; }
+  50% { border-color: hsl(var(--primary)); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Custom scrollbar for desktop */
+@media (min-width: 768px) {
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--ink));
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--ink-light));
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground));
+  }
+}

@@ -1,0 +1,803 @@
+import { useState, useEffect, useRef } from 'react';
+import { Button } from '@/components/ui/button';
+import { Character, GameMessage, GameChoice } from '@/types/game';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { DeepseekService } from '@/services/deepseekService';
+import { 
+  saveTutorialStep, 
+  updateTutorialStepChoice, 
+  getTutorialSteps, 
+  updateCharacterTutorialProgress,
+  saveChatMessage
+} from '@/services/gameService';
+import { saveTutorialProgress, loadTutorialProgress, saveToLocalStorage } from '@/services/autoSaveService';
+import { Loader2, Sparkles, MessageSquare, Save } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
+import { useLanguage } from '@/contexts/LanguageContext';
+
+type TutorialScreenProps = {
+  character: Character;
+  onComplete: (updatedCharacter: Character) => void;
+  onBack: () => void;
+};
+
+type TutorialStep = {
+  narrative: string;
+  choices: { id: string; text: string; outcome: string }[];
+  isAwakening: boolean;
+  statChanges?: { qi?: number; health?: number; karma?: number };
+};
+
+export function TutorialScreen({ character, onComplete, onBack }: TutorialScreenProps) {
+  const [messages, setMessages] = useState<GameMessage[]>([]);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentChoices, setCurrentChoices] = useState<GameChoice[]>([]);
+  const [tutorialHistory, setTutorialHistory] = useState('');
+  const [isAwakened, setIsAwakened] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const { toast } = useToast();
+  const { language } = useLanguage();
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Use refs to prevent duplicate calls (survives re-renders)
+  const isInitializedRef = useRef(false);
+  const isGeneratingRef = useRef(false);
+
+  const totalSteps = 5;
+
+  // Auto-scroll to bottom when new messages are added
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  // Auto-save function
+  const autoSave = async (
+    step: number, 
+    narrative: string, 
+    choices: any[], 
+    playerChoice?: string,
+    messagesToSave?: GameMessage[],
+    historyToSave?: string
+  ) => {
+    if (!character.id) return;
+    
+    setIsSaving(true);
+    try {
+      // Use provided messages or current state
+      const finalMessages = messagesToSave || messages;
+      const finalHistory = historyToSave || tutorialHistory;
+      
+      // Save to localStorage immediately with full message history
+      saveToLocalStorage({
+        characterId: character.id,
+        character,
+        currentPhase: 'tutorial',
+        tutorialStep: step,
+        tutorialHistory: finalHistory
+      });
+      
+      // Save tutorial progress with all messages
+      await saveTutorialProgress(
+        character.id, 
+        step, 
+        narrative, 
+        choices, 
+        playerChoice,
+        finalMessages, // Save all messages
+        finalHistory // Save full history
+      );
+      
+      console.log('Tutorial auto-saved at step:', step, 'with', finalMessages.length, 'messages');
+    } catch (error) {
+      console.error('Auto-save failed:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Helper function to generate contextual fallback narrative
+  const generateContextualFallbackNarrative = (
+    characterName: string,
+    goldenFinger: any,
+    origin: string,
+    gender?: string,
+    step: number = 0
+  ): string => {
+    const pronoun = gender === 'Female' ? 'her' : 'his';
+    const pronounSubject = gender === 'Female' ? 'she' : 'he';
+    
+    // Progressive narrative based on step
+    if (step >= 4) {
+      // Final awakening step
+      const awakeningScenarios: Record<string, string> = {
+        'system': `${characterName} feels the world shift as ethereal blue text materializes: "System fully activated. Welcome to your new reality, Host." Power courses through ${pronoun} veins.`,
+        'grandpa': `The ancient ring blazes with light as Grand Master Chen's voice booms: "Rise, my successor! The power of ages flows through you now!" ${characterName} feels millennia of wisdom awakening.`,
+        'copycat': `${characterName}'s eyes burn with divine fire as the Copycat Eye fully awakens. Every technique, every secret art in the world becomes visible and learnable.`,
+        'alchemy': `${characterName}'s body transforms completely, becoming a living furnace of creation. The Alchemy God Body has awakened—every poison becomes medicine, every herb becomes power.`,
+        'reincarnator': `Countless lifetimes of memories flood ${characterName}'s consciousness. Past lives, ancient techniques, forgotten secrets—all become ${pronoun} inheritance.`,
+        'heavenly-demon': `Dark energy erupts from ${characterName} as the Heavenly Demon bloodline fully manifests. ${pronounSubject.charAt(0).toUpperCase() + pronounSubject.slice(1)} stands reborn in shadow and power.`,
+        'azure-dragon': `${characterName} roars as azure scales cover ${pronoun} body. The ancient dragon bloodline awakens, bringing with it the power to shake heaven and earth.`,
+        'time-reversal': `Time bends to ${characterName}'s will as the Karmic Time Wheel completes its binding. Past, present, and future become tools in ${pronoun} hands.`,
+        'merchant': `The Heavenly Merchant System fully activates around ${characterName}. Infinite treasures from across dimensions await ${pronoun} trade.`,
+        'sword-spirit': `The Primordial Sword Spirit merges with ${characterName}'s soul. Together, they shall cut through the very fabric of reality.`,
+        'heaven-eye': `${characterName}'s third eye opens completely, revealing the hidden truths of the universe. Nothing can remain concealed from the Heaven Defying Eye.`,
+        'soul-palace': `The Nine-Layer Soul Palace manifests fully in ${characterName}'s consciousness. Each layer contains power beyond mortal comprehension.`,
+        'body-refiner': `${characterName}'s body achieves perfect refinement, becoming harder than divine metal yet flexible as flowing water. The Indestructible Vajra Body is complete.`,
+        'fate-plunderer': `${characterName} feels the threads of fate responding to ${pronoun} will. The power to steal destiny itself has fully awakened.`,
+        'poison-king': `Every toxin in the world calls to ${characterName} as the Poison King constitution completes its awakening. Death becomes ${pronoun} servant.`
+      };
+      
+      return awakeningScenarios[goldenFinger.id] || awakeningScenarios['system'];
+    }
+    
+    // Progressive awakening steps
+    const progressiveScenarios: Record<string, string[]> = {
+      'system': [
+        `${characterName} notices strange blue glimmers at the edge of ${pronoun} vision, like text that shouldn't exist.`,
+        `The mysterious text becomes clearer. ${characterName} can almost make out words: "Scanning... Host potential detected..."`,
+        `${characterName} hears a mechanical voice in ${pronoun} mind: "Compatibility assessment in progress. Please remain calm."`,
+        `The System voice grows stronger: "Final calibration required. Prepare for initialization, Host."`
+      ],
+      'grandpa': [
+        `${characterName} feels the old ring on ${pronoun} finger growing strangely warm during moments of despair.`,
+        `A faint voice seems to whisper from the ring: "Young one... can you hear me?"`,
+        `The voice becomes clearer: "I am Grand Master Chen. You have potential, child. Will you accept my guidance?"`,
+        `Grand Master Chen's spirit manifests partially: "The time has come to unlock your true heritage."`
+      ],
+      'copycat': [
+        `${characterName} experiences strange burning sensations in ${pronoun} eyes when watching others practice martial arts.`,
+        `The burning intensifies, and ${characterName} begins to see the flow of qi in other people's techniques.`,
+        `${characterName}'s vision sharpens impossibly. ${pronounSubject.charAt(0).toUpperCase() + pronounSubject.slice(1)} can see the very essence of martial techniques.`,
+        `The Copycat Eye stirs to full awakening. Every movement, every secret, becomes visible to ${characterName}.`
+      ]
+    };
+    
+    const scenarios = progressiveScenarios[goldenFinger.id] || progressiveScenarios['system'];
+    return scenarios[Math.min(step, scenarios.length - 1)] || scenarios[0];
+  };
+
+  // Helper function to generate contextual choices based on Golden Finger
+  const generateContextualChoices = (
+    goldenFinger: any,
+    step: number = 0
+  ): Array<{ id: string; text: string; outcome: string }> => {
+    const choicesByGoldenFinger: Record<string, Array<{ id: string; text: string; outcome: string }>> = {
+      'system': [
+        { id: 'accept', text: 'Accept the System\'s guidance', outcome: 'progress' },
+        { id: 'question', text: 'Ask the System what it wants', outcome: 'branch' },
+        { id: 'resist', text: 'Try to resist the System\'s influence', outcome: 'progress' },
+      ],
+      'grandpa': [
+        { id: 'listen', text: 'Listen respectfully to the elder', outcome: 'progress' },
+        { id: 'test', text: 'Test if the voice is real', outcome: 'branch' },
+        { id: 'ignore', text: 'Ignore the strange voice', outcome: 'progress' },
+      ],
+      'copycat': [
+        { id: 'focus', text: 'Focus on the burning sensation', outcome: 'progress' },
+        { id: 'observe', text: 'Carefully observe the techniques', outcome: 'branch' },
+        { id: 'close_eyes', text: 'Close your eyes to stop the pain', outcome: 'progress' },
+      ],
+      'alchemy': [
+        { id: 'embrace', text: 'Embrace the transformation', outcome: 'progress' },
+        { id: 'analyze', text: 'Try to understand what\'s happening', outcome: 'branch' },
+        { id: 'fight', text: 'Fight against the changes', outcome: 'progress' },
+      ],
+      'reincarnator': [
+        { id: 'remember', text: 'Try to remember more clearly', outcome: 'progress' },
+        { id: 'accept', text: 'Accept the foreign memories', outcome: 'branch' },
+        { id: 'reject', text: 'Reject these strange visions', outcome: 'progress' },
+      ],
+    };
+
+    // Default choices if Golden Finger not found
+    const defaultChoices = [
+      { id: 'accept', text: 'Embrace the awakening power', outcome: 'progress' },
+      { id: 'resist', text: 'Try to control the energy', outcome: 'progress' },
+      { id: 'observe', text: 'Wait and observe carefully', outcome: 'branch' },
+    ];
+
+    return choicesByGoldenFinger[goldenFinger.id] || defaultChoices;
+  };
+
+  useEffect(() => {
+    // Strict check using ref - survives React StrictMode double-invoke
+    if (isInitializedRef.current) {
+      console.log('Already initialized (ref check), skipping...');
+      return;
+    }
+    isInitializedRef.current = true;
+    
+    console.log('Initializing tutorial (first time only)...');
+    loadExistingTutorialOrGenerate();
+  }, []);
+
+  const loadExistingTutorialOrGenerate = async () => {
+    console.log('=== LOAD EXISTING TUTORIAL OR GENERATE ===');
+    console.log('Character ID:', character.id);
+    
+    if (!character.id) {
+      console.log('No character ID, generating new tutorial step');
+      generateTutorialStep();
+      return;
+    }
+
+    try {
+      // Try to load from localStorage first (faster)
+      const localProgress = await loadTutorialProgress(character.id);
+      
+      if (localProgress && localProgress.step > 0) {
+        console.log('Found local tutorial progress at step:', localProgress.step);
+        
+        // Set current step (already 1-indexed in storage)
+        setCurrentStep(localProgress.step);
+        
+        // Restore all messages if available
+        if (localProgress.allMessages && localProgress.allMessages.length > 0) {
+          console.log('Restoring', localProgress.allMessages.length, 'messages from localStorage');
+          setMessages(localProgress.allMessages);
+        } else if (localProgress.narrative) {
+          // Fallback: just add the last narrative
+          const narrativeMessage: GameMessage = {
+            id: crypto.randomUUID(),
+            type: 'tutorial',
+            content: localProgress.narrative,
+            timestamp: new Date(),
+          };
+          setMessages([narrativeMessage]);
+        }
+        
+        // Restore tutorial history
+        if (localProgress.tutorialHistory) {
+          setTutorialHistory(localProgress.tutorialHistory);
+        } else if (localProgress.narrative) {
+          setTutorialHistory(localProgress.narrative);
+        }
+        
+        // ✅ FIX: Check if tutorial is completed (step 5 or has awakening message)
+        const hasAwakeningMessage = localProgress.allMessages?.some(
+          msg => msg.type === 'system' && msg.content.includes('awakened')
+        );
+        const isStep5 = localProgress.step >= 5;
+        
+        if (hasAwakeningMessage || isStep5) {
+          console.log('Tutorial awakening detected from localStorage');
+          setIsAwakened(true);
+          
+          // Add awakening message if not already in messages
+          if (!hasAwakeningMessage) {
+            const awakeningMessage: GameMessage = {
+              id: crypto.randomUUID(),
+              type: 'system',
+              content: `⚡ ${character.goldenFinger.name} has been awakened! Your journey truly begins now...`,
+              timestamp: new Date(),
+            };
+            setMessages(prev => [...prev, awakeningMessage]);
+          }
+        } else {
+          // Set choices for non-awakened state
+          if (localProgress.choices && localProgress.choices.length > 0) {
+            const gameChoices: GameChoice[] = localProgress.choices.map((c: any) => ({
+              id: c.id,
+              text: c.text,
+              type: 'tutorial' as const,
+            }));
+            setCurrentChoices(gameChoices);
+          }
+        }
+        
+        setIsLoading(false);
+        return;
+      }
+
+      // Check database for existing tutorial steps
+      console.log('Checking database for existing tutorial steps...');
+      const existingSteps = await getTutorialSteps(character.id);
+      console.log('Existing steps found:', existingSteps.length);
+      
+      if (existingSteps.length > 0) {
+        console.log('Loading existing tutorial progress from database...');
+        const lastStep = existingSteps[existingSteps.length - 1];
+        setCurrentStep(lastStep.step_number - 1);
+        
+        // Rebuild messages from existing steps
+        const tutorialMessages: GameMessage[] = [];
+        let history = '';
+        
+        for (const step of existingSteps) {
+          tutorialMessages.push({
+            id: crypto.randomUUID(),
+            type: 'tutorial',
+            content: step.narrative,
+            timestamp: new Date(step.created_at),
+          });
+          
+          history += '\n' + step.narrative;
+          
+          if (step.player_choice) {
+            tutorialMessages.push({
+              id: crypto.randomUUID(),
+              type: 'action',
+              content: step.player_choice,
+              timestamp: new Date(step.updated_at),
+              speaker: character.name,
+            });
+            history += `\nPlayer chose: ${step.player_choice}`;
+          }
+        }
+        
+        setMessages(tutorialMessages);
+        setTutorialHistory(history);
+        setIsLoading(false);
+        
+        if (lastStep.is_awakening) {
+          setIsAwakened(true);
+          const awakeningMessage: GameMessage = {
+            id: crypto.randomUUID(),
+            type: 'system',
+            content: `⚡ ${character.goldenFinger.name} has been awakened! Your journey truly begins now...`,
+            timestamp: new Date(),
+          };
+          setMessages(prev => [...prev, awakeningMessage]);
+        } else {
+          const gameChoices: GameChoice[] = lastStep.choices.map((c: any) => ({
+            id: c.id,
+            text: c.text,
+            type: 'tutorial' as const,
+          }));
+          setCurrentChoices(gameChoices);
+        }
+      } else {
+        // No existing steps, generate first one
+        console.log('No existing steps found, generating new tutorial step');
+        generateTutorialStep();
+      }
+    } catch (error) {
+      console.error('Error loading tutorial progress:', error);
+      console.log('Falling back to generate new tutorial step');
+      generateTutorialStep();
+    }
+  };
+
+  const generateTutorialStep = async (previousChoice?: string, currentMessages?: GameMessage[]) => {
+    // Use ref to prevent duplicate calls
+    if (isGeneratingRef.current) {
+      console.log('Already generating tutorial step (ref check), skipping...');
+      return;
+    }
+    
+    isGeneratingRef.current = true;
+    setIsLoading(true);
+    setCurrentChoices([]);
+
+    console.log('=== TUTORIAL STEP GENERATION START ===');
+    console.log('Current step:', currentStep);
+    console.log('Previous choice:', previousChoice);
+    
+    // Use provided messages or current state
+    const messagesToUse = currentMessages || messages;
+    console.log('Using', messagesToUse.length, 'messages for context');
+
+    try {
+      // Generate AI content
+      console.log('Calling DeepseekService.generateTutorial...');
+      const step = await DeepseekService.generateTutorial({
+        characterName: character.name,
+        gender: character.visualTraits?.gender || undefined,
+        origin: { title: character.origin, description: character.origin },
+        goldenFinger: character.goldenFinger,
+        currentStep,
+        previousChoice,
+        tutorialHistory,
+        language,
+      }) as TutorialStep;
+
+      console.log('AI generation successful:', step);
+
+      // Save to database first (if character has ID)
+      if (character.id) {
+        try {
+          console.log('Saving to database...');
+          await saveTutorialStep(
+            character.id,
+            currentStep + 1, // Database uses 1-indexed
+            step.narrative,
+            step.choices,
+            step.statChanges,
+            step.isAwakening
+          );
+          
+          // Update character's tutorial progress
+          await updateCharacterTutorialProgress(
+            character.id,
+            currentStep + 1,
+            step.isAwakening,
+            step.isAwakening
+          );
+          console.log('Database save successful');
+        } catch (dbError) {
+          console.error('Database save failed, continuing with local state:', dbError);
+          // Continue with local state even if database fails
+        }
+      }
+
+      // Add narrative as message (ONLY ONCE)
+      const narrativeMessage: GameMessage = {
+        id: crypto.randomUUID(),
+        type: 'tutorial',
+        content: step.narrative,
+        timestamp: new Date(),
+      };
+      console.log('Adding narrative message:', narrativeMessage.content);
+      
+      // Update messages state - add to the messages we're using (which may already include choice)
+      const updatedMessages = [...messagesToUse, narrativeMessage];
+      setMessages(updatedMessages);
+
+      // Update history for context
+      const updatedHistory = tutorialHistory + '\n' + step.narrative;
+      setTutorialHistory(updatedHistory);
+
+      // AUTO-SAVE after AI generation with updated messages and history
+      await autoSave(
+        currentStep + 1, 
+        step.narrative, 
+        step.choices, 
+        undefined, 
+        updatedMessages, 
+        updatedHistory
+      );
+
+      // Check if awakening complete
+      if (step.isAwakening) {
+        console.log('Tutorial awakening complete');
+        setIsAwakened(true);
+        const awakeningMessage: GameMessage = {
+          id: crypto.randomUUID(),
+          type: 'system',
+          content: `⚡ ${character.goldenFinger.name} has been awakened! Your journey truly begins now...`,
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, awakeningMessage]);
+      } else {
+        // Convert AI-generated choices to GameChoice format
+        console.log('Setting AI-generated choices:', step.choices);
+        const gameChoices: GameChoice[] = step.choices.map(c => ({
+          id: c.id,
+          text: c.text,
+          type: 'tutorial' as const,
+        }));
+        setCurrentChoices(gameChoices);
+      }
+    } catch (error) {
+      console.error('Tutorial generation error:', error);
+      console.log('=== USING FALLBACK SYSTEM ===');
+      
+      toast({
+        title: "Error",
+        description: "Failed to generate tutorial. Using contextual fallback.",
+        variant: "destructive",
+      });
+      
+      // Use contextual fallback narrative based on character's Golden Finger and origin
+      const contextualNarrative = generateContextualFallbackNarrative(
+        character.name,
+        character.goldenFinger,
+        character.origin,
+        character.visualTraits?.gender,
+        currentStep
+      );
+      
+      // Generate contextual choices based on Golden Finger
+      const contextualChoices = generateContextualChoices(character.goldenFinger, currentStep);
+      
+      console.log('Fallback narrative:', contextualNarrative);
+      console.log('Fallback choices:', contextualChoices);
+      
+      // Save fallback to database if possible
+      if (character.id) {
+        try {
+          await saveTutorialStep(
+            character.id,
+            currentStep + 1,
+            contextualNarrative,
+            contextualChoices,
+            { qi: 5, health: 0, karma: 0 },
+            currentStep >= 4
+          );
+          console.log('Fallback saved to database');
+        } catch (dbError) {
+          console.error('Fallback database save failed:', dbError);
+        }
+      }
+      
+      const fallbackMessage: GameMessage = {
+        id: crypto.randomUUID(),
+        type: 'tutorial',
+        content: contextualNarrative,
+        timestamp: new Date(),
+      };
+      console.log('Adding fallback message:', fallbackMessage.content);
+      
+      // Update messages and history - add to the messages we're using
+      const updatedMessages = [...messagesToUse, fallbackMessage];
+      setMessages(updatedMessages);
+      
+      const updatedHistory = tutorialHistory + '\n' + contextualNarrative;
+      setTutorialHistory(updatedHistory);
+      
+      // AUTO-SAVE fallback content with updated messages and history
+      await autoSave(
+        currentStep + 1, 
+        contextualNarrative, 
+        contextualChoices, 
+        undefined, 
+        updatedMessages, 
+        updatedHistory
+      );
+      
+      if (currentStep >= 4) {
+        console.log('Fallback awakening complete');
+        setIsAwakened(true);
+        const awakeningMessage: GameMessage = {
+          id: crypto.randomUUID(),
+          type: 'system',
+          content: `⚡ ${character.goldenFinger.name} has been awakened! Your journey truly begins now...`,
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, awakeningMessage]);
+      } else {
+        // Use contextual choices instead of hardcoded ones
+        console.log('Setting fallback choices:', contextualChoices);
+        const gameChoices: GameChoice[] = contextualChoices.map(c => ({
+          id: c.id,
+          text: c.text,
+          type: 'tutorial' as const,
+        }));
+        setCurrentChoices(gameChoices);
+      }
+    } finally {
+      setIsLoading(false);
+      isGeneratingRef.current = false;
+      console.log('=== TUTORIAL STEP GENERATION END ===');
+    }
+  };
+
+  const handleChoice = async (choice: GameChoice) => {
+    // Add player choice as message
+    const choiceMessage: GameMessage = {
+      id: crypto.randomUUID(),
+      type: 'action',
+      content: choice.text,
+      timestamp: new Date(),
+      speaker: character.name,
+    };
+    
+    // Create updated messages array with choice included
+    const messagesWithChoice = [...messages, choiceMessage];
+    setMessages(messagesWithChoice);
+    
+    const historyWithChoice = tutorialHistory + `\nPlayer chose: ${choice.text}`;
+    setTutorialHistory(historyWithChoice);
+    
+    // Save player choice to database
+    if (character.id) {
+      try {
+        await updateTutorialStepChoice(character.id, currentStep + 1, choice.text);
+      } catch (error) {
+        console.error('Failed to save choice to database:', error);
+      }
+    }
+
+    // Move to next step
+    setCurrentStep(currentStep + 1);
+
+    // Reset generating ref to allow next generation
+    isGeneratingRef.current = false;
+
+    // Generate next tutorial step - pass messages that include the choice
+    await generateTutorialStep(choice.text, messagesWithChoice);
+  };
+
+  const handleComplete = async () => {
+    const updatedCharacter: Character = {
+      ...character,
+      tutorialCompleted: true,
+      goldenFingerUnlocked: true,
+    };
+    
+    // Save tutorial completion to database
+    if (character.id) {
+      try {
+        await updateCharacterTutorialProgress(
+          character.id,
+          5, // Final step
+          true, // Tutorial completed
+          true  // Golden finger unlocked
+        );
+        
+        // ✅ BARU: Transfer tutorial messages ke chat_messages untuk continuity
+        console.log('Transferring', messages.length, 'tutorial messages to game chat...');
+        for (const msg of messages) {
+          await saveChatMessage(
+            character.id,
+            msg.type === 'action' ? 'user' : 'assistant',
+            msg.content,
+            msg.type,
+            msg.speaker
+          );
+        }
+        console.log('Tutorial messages transferred successfully');
+        
+        toast({
+          title: "Golden Finger Awakened!",
+          description: "Your progress has been saved to database.",
+        });
+      } catch (error) {
+        console.error('Error saving tutorial completion:', error);
+        
+        // Fallback to localStorage
+        localStorage.setItem(`tutorial_completed_${character.id}`, 'true');
+        localStorage.setItem(`golden_finger_unlocked_${character.id}`, 'true');
+        
+        toast({
+          title: "Golden Finger Awakened!",
+          description: "Progress saved locally (database unavailable).",
+        });
+      }
+    } else {
+      toast({
+        title: "Golden Finger Awakened!",
+        description: "Tutorial completed successfully.",
+      });
+    }
+    
+    onComplete(updatedCharacter);
+  };
+
+  return (
+    <div className="min-h-screen h-screen flex flex-col relative overflow-hidden">
+      {/* Background Image */}
+      <div 
+        className="fixed inset-0 bg-cover bg-center bg-no-repeat"
+        style={{ 
+          backgroundImage: 'url(/assets/backgrounds/wuxia-dynamic.jpg)',
+        }}
+      />
+      
+      {/* Dark Overlay */}
+      <div className="fixed inset-0 bg-gradient-to-b from-black/80 via-black/60 to-black/90" />
+      
+      {/* Header - FIXED at top */}
+      <div className="relative z-10 p-4 sm:p-5 border-b border-white/10 bg-black/40 backdrop-blur-md flex-shrink-0">
+        <div className="flex items-center justify-between max-w-2xl mx-auto">
+          <div>
+            <p className="text-xs sm:text-sm text-gold/60 uppercase tracking-[0.2em]">
+              Awakening Scenario
+            </p>
+            <h1 className="font-display text-lg sm:text-xl text-gold-gradient mt-1">
+              {character.goldenFinger.icon} {character.goldenFinger.name}
+            </h1>
+          </div>
+          <div className="flex items-center gap-3">
+            {isSaving && (
+              <div className="flex items-center gap-1 text-xs text-white/50">
+                <Save className="w-3 h-3 animate-pulse" />
+                <span>Saving...</span>
+              </div>
+            )}
+            <span className="text-xs sm:text-sm text-white/50">
+              Step {Math.min(currentStep + 1, totalSteps)}/{totalSteps}
+            </span>
+            <div className="flex gap-1.5">
+              {Array.from({ length: totalSteps }).map((_, i) => (
+                <div
+                  key={i}
+                  className={cn(
+                    "w-2.5 h-2.5 rounded-full transition-all duration-500",
+                    i <= currentStep ? "bg-gold shadow-lg shadow-gold/50" : "bg-white/20"
+                  )}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Story Area - Scrollable independently */}
+      <div className="relative z-10 flex-1 overflow-hidden">
+        <ScrollArea className="h-full">
+          <div className="max-w-2xl mx-auto space-y-4 p-4 sm:p-6">
+            {messages.map((msg) => (
+              <div
+                key={msg.id}
+                className={cn(
+                  "p-4 sm:p-5 rounded-xl animate-fade-in backdrop-blur-md",
+                  msg.type === 'tutorial' && "bg-black/50 border border-white/10",
+                  msg.type === 'action' && "bg-gold/15 border border-gold/30 ml-8",
+                  msg.type === 'system' && "bg-jade/20 border border-jade/40 text-center"
+                )}
+              >
+                {msg.speaker && (
+                  <p className="text-sm text-gold mb-2 font-display">{msg.speaker}</p>
+                )}
+                <p className={cn(
+                  "text-sm sm:text-base leading-relaxed text-white/90 break-words",
+                  msg.type === 'system' && "text-jade-glow font-medium"
+                )}>
+                  {msg.content}
+                </p>
+              </div>
+            ))}
+
+            {isLoading && (
+              <div className="flex items-center justify-center p-8 bg-black/40 backdrop-blur-md rounded-xl border border-white/10">
+                <Loader2 className="w-6 h-6 text-gold animate-spin" />
+                <span className="ml-3 text-white/50">Fate unfolds...</span>
+              </div>
+            )}
+            
+            {/* Scroll anchor */}
+            <div ref={messagesEndRef} />
+          </div>
+        </ScrollArea>
+      </div>
+
+      {/* Choices / Complete - Fixed at bottom */}
+      <div className="relative z-10 p-4 sm:p-6 border-t border-white/10 bg-black/60 backdrop-blur-md flex-shrink-0">
+        <div className="max-w-2xl mx-auto">
+          {isAwakened ? (
+            <div className="space-y-4">
+              <div className="p-5 sm:p-6 rounded-xl bg-gold/15 border border-gold/40 text-center">
+                <div className="relative inline-block">
+                  <Sparkles className="w-10 h-10 sm:w-12 sm:h-12 text-gold mx-auto mb-3" />
+                  <div className="absolute inset-0 w-10 h-10 sm:w-12 sm:h-12 bg-gold/40 blur-xl rounded-full mx-auto" />
+                </div>
+                <h3 className="font-display text-xl sm:text-2xl text-gold mb-2">
+                  Golden Finger Awakened!
+                </h3>
+                <p className="text-sm sm:text-base text-white/60 break-words">
+                  {character.goldenFinger.effect}
+                </p>
+              </div>
+              <Button
+                variant="golden"
+                size="lg"
+                onClick={handleComplete}
+                className="w-full h-14 text-lg font-display shadow-lg hover:shadow-gold/30"
+              >
+                <Sparkles className="mr-3 w-5 h-5 flex-shrink-0" />
+                Enter the Jianghu
+              </Button>
+            </div>
+          ) : currentChoices.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs text-white/50 text-center mb-3">
+                <MessageSquare className="w-3 h-3 inline mr-1" />
+                Choose your path
+              </p>
+              <div className="space-y-2">
+                {currentChoices.map((choice) => (
+                  <button
+                    key={choice.id}
+                    onClick={() => handleChoice(choice)}
+                    className="w-full text-left p-3 bg-white/5 hover:bg-gold/20 border border-white/10 hover:border-gold/40 text-white hover:text-gold transition-all duration-300 rounded-lg backdrop-blur-md disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden"
+                    disabled={isLoading}
+                  >
+                    <div className="flex items-start gap-2">
+                      <span className="text-gold text-xs mt-0.5 flex-shrink-0">▸</span>
+                      <span className="text-xs leading-tight line-clamp-3 overflow-hidden">
+                        {choice.text}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}

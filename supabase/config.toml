@@ -1,0 +1,10 @@
+project_id = "fvhyqtlnuuuxcupomzxb"
+
+[functions.wuxia-narrator]
+verify_jwt = false
+
+[functions.generate-fate]
+verify_jwt = false
+
+[functions.generate-tutorial]
+verify_jwt = false

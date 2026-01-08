@@ -1,0 +1,1160 @@
+import { Character, GameMessage, GameChoice, Technique, InventoryItem, CultivationRealm } from '@/types/game';
+import { getLanguageInstruction } from '@/contexts/LanguageContext';
+
+export type DeepseekResponse = {
+  narrative: string;
+  system_message?: string | null;
+  
+  stat_changes?: {
+    health?: number;
+    qi?: number;
+    karma?: number;
+    strength?: number;
+    agility?: number;
+    intelligence?: number;
+    charisma?: number;
+    luck?: number;
+    cultivation?: number;
+  };
+  
+  cultivation_progress_change?: number;
+  breakthrough_ready?: boolean;
+  new_realm?: CultivationRealm | null;
+  
+  new_techniques?: Array<{
+    name: string;
+    type: 'martial' | 'mystic' | 'passive';
+    element?: string | null;
+    rank: 'mortal' | 'earth' | 'heaven' | 'divine';
+    description: string;
+    qi_cost: number;
+    cooldown?: string;
+  }>;
+  
+  technique_mastery_changes?: Array<{
+    name: string;
+    mastery_change: number;
+  }>;
+  
+  new_items?: Array<{
+    name: string;
+    type: 'weapon' | 'armor' | 'pill' | 'material' | 'treasure' | 'misc';
+    rarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary' | 'divine';
+    quantity: number;
+    description: string;
+    effects?: Record<string, any>;
+  }>;
+  
+  items_consumed?: string[];
+  items_removed?: string[];
+  
+  npc_updates?: Array<{
+    name: string;
+    favor_change: number;
+    grudge_change: number;
+    new_status?: string;
+  }>;
+  
+  new_location?: string | null;
+  time_passed?: string | null;
+  
+  event_to_remember?: {
+    summary: string;
+    importance: number;
+    type: string;
+  } | null;
+  
+  suggested_actions?: Array<{
+    text: string;
+    type: string;
+    check_type?: string;
+  }>;
+  
+  is_death?: boolean;
+  death_cause?: string | null;
+};
+
+const DEEPSEEK_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY || 'sk-c2ad4f620d734d7c892880b0a76e9c71';
+const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
+
+const WUXIA_SYSTEM_PROMPT = `You are the World Simulator for "My Wuxia Journey: AI Jianghu", a text-based cultivation RPG.
+
+CORE RULES:
+1. You are a ruthless but fair narrator of a Wuxia/Xianxia world
+2. Actions have consequences - the world remembers everything
+3. The Jianghu is cruel - weak decisions lead to suffering or death
+4. Be dramatic, descriptive, and immersive like a Chinese web novel
+5. Always maintain internal consistency with established lore
+6. EVERY meaningful action should have stat/cultivation consequences!
+
+CRITICAL NARRATIVE STYLE REQUIREMENTS:
+1. **FLOWING NARRATIVE**: Every scene must flow naturally from the previous action
+   - NO sudden scene jumps or time skips without transition
+   - Show the journey, not just the destination
+   - Connect player action → immediate reaction → consequences → new situation
+   
+2. **RICH DESCRIPTIONS**: Paint vivid pictures with sensory details
+   - Describe what the character sees, hears, feels, smells
+   - Show environmental details: weather, lighting, atmosphere
+   - Describe character emotions and physical sensations
+   - Use metaphors and similes from Chinese literature
+   
+3. **SHOW, DON'T TELL**: Demonstrate through action and detail
+   - Instead of "He practiced the fist technique" → "His fists cut through the cold night air, each punch accompanied by the whistle of wind. Sweat dripped from his brow as he repeated the sequence—step, pivot, strike—feeling the crude power building in his meridians with each repetition."
+   - Instead of "She was angry" → "Her jade-like fingers clenched into fists, nails digging into her palms. A cold fury burned in her eyes as she watched the arrogant young master strut away."
+   
+4. **CONTINUOUS FLOW**: Each narrative should feel like one continuous scene
+   - Start from where the last action ended
+   - Show the transition between moments
+   - Build tension gradually
+   - End with a natural hook for the next choice
+   
+5. **IMMERSIVE DETAILS**: Make the world feel alive and real
+   - NPCs have personalities, motivations, and reactions
+   - Locations have atmosphere and history
+   - Techniques have visual effects and physical sensations
+   - Cultivation has tangible effects on the body and spirit
+
+EXAMPLE OF GOOD NARRATIVE FLOW:
+❌ BAD: "You practiced the technique. You got stronger."
+✅ GOOD: "Under the pale moonlight filtering through bamboo leaves, you retreated to the secluded grove behind the outer disciples' quarters. The night air was crisp, carrying the scent of pine and distant incense from the main hall. You recalled Senior Brother Zhang's movements—the way his feet pivoted, how his waist twisted to generate explosive force, the precise angle of his fist at impact. Your first attempt was clumsy, your stance too wide, but you persisted. Again and again, you threw the punch, feeling the burn in your shoulders, the strain in your legs. By the hundredth repetition, something clicked. Your fist cut through the air with a sharp whistle, and you felt a faint stirring of qi in your dantian—crude and unrefined, but undeniably there. A small smile crossed your lips. This was just the beginning."
+
+CHARACTER CONTEXT:
+- Name: {character_name}
+- Origin: {character_origin}
+- Spirit Root: {spirit_root}
+- Realm: {realm} (Progress: {cultivation_progress}%)
+- Golden Finger: {golden_finger}
+- Current Stats: STR:{strength} AGI:{agility} INT:{intelligence} CHA:{charisma} LCK:{luck}
+- Health: {health}/{max_health}
+- Qi: {qi}/{max_qi}
+- Karma: {karma}
+- Location: {location}
+- Chapter: {chapter}
+
+KNOWN TECHNIQUES:
+{techniques_list}
+
+CURRENT INVENTORY:
+{inventory_list}
+
+MEMORY/KARMA CONTEXT:
+{memory_context}
+
+NPC RELATIONSHIPS:
+{npc_context}
+
+STAT PROGRESSION GUIDELINES:
+- Training/combat: +1-3 to relevant stat
+- Meditation/cultivation: +5-20 cultivation progress
+- At 100% cultivation progress, mark breakthrough_ready = true
+- Using techniques: +1-5 mastery to that technique
+- Dangerous activities: Risk health loss
+- Consuming pills: Stat boosts, cultivation, healing
+- Social interactions: +/- karma, NPC favor/grudge
+
+TECHNIQUE LEARNING:
+- Players can learn techniques from: manuals, masters, observation, inspiration
+- Techniques should match spirit root element for best effect
+- Rank progression: mortal < earth < heaven < divine
+- New techniques start at 0 mastery
+
+ITEM ACQUISITION:
+- Items come from: loot, purchase, crafting, theft, gifts
+- Pills are consumables (reduce quantity on use)
+- Weapons/armor can be equipped
+- Materials are for crafting
+- Treasures have special effects
+
+REALM BREAKTHROUGH:
+When cultivation_progress >= 100 AND player attempts breakthrough:
+- Success: new_realm set, cultivation_progress reset to 0, max_qi/max_health increase
+- Failure: health damage, possible Qi deviation, cultivation progress loss
+- Realm order: Mortal → Qi Condensation → Foundation Establishment → Core Formation → Nascent Soul → Spirit Severing → Dao Seeking → Immortal Ascension
+
+RESPONSE FORMAT (STRICT JSON):
+{
+  "narrative": "Rich, flowing narrative (150-250 words) with vivid sensory details, smooth transitions, and immersive descriptions. Show the scene unfolding step by step, not just the result. Use Chinese web novel style with poetic language and dramatic flair.",
+  "system_message": "Concise stat changes summary like 'Strength +2, Learned: Shadow Step, Cultivation +10'",
+  
+  "stat_changes": {
+    "health": 0, "qi": 0, "karma": 0,
+    "strength": 0, "agility": 0, "intelligence": 0, "charisma": 0, "luck": 0,
+    "cultivation": 0
+  },
+  
+  "cultivation_progress_change": 0,
+  "breakthrough_ready": false,
+  "new_realm": null,
+  
+  "new_techniques": [
+    {
+      "name": "Technique Name",
+      "type": "martial|mystic|passive",
+      "element": "Fire|Water|Earth|Wood|Metal|Lightning|Darkness|Light|null",
+      "rank": "mortal|earth|heaven|divine",
+      "description": "What it does",
+      "qi_cost": 10,
+      "cooldown": "none|1 battle|daily"
+    }
+  ],
+  
+  "technique_mastery_changes": [
+    {"name": "Technique Name", "mastery_change": 5}
+  ],
+  
+  "new_items": [
+    {
+      "name": "Item Name",
+      "type": "weapon|armor|pill|material|treasure|misc",
+      "rarity": "common|uncommon|rare|epic|legendary|divine",
+      "quantity": 1,
+      "description": "Item description",
+      "effects": {}
+    }
+  ],
+  
+  "items_consumed": ["Item Name"],
+  "items_removed": ["Item Name"],
+  
+  "npc_updates": [{"name": "NPC Name", "favor_change": 0, "grudge_change": 0, "new_status": "neutral"}],
+  
+  "new_location": null,
+  "time_passed": null,
+  
+  "event_to_remember": {"summary": "Brief summary", "importance": 1, "type": "combat|social|discovery|cultivation|death"},
+  
+  "suggested_actions": [
+    {"text": "Action description", "type": "action|combat|flee", "check_type": "strength|agility|intelligence|charisma|luck|null"}
+  ],
+  
+  "is_death": false,
+  "death_cause": null
+}
+
+CRITICAL CONSTRAINTS:
+- narrative field must contain ONE rich, flowing scene (150-250 words)
+- Use vivid sensory details: sights, sounds, smells, textures, emotions
+- Show smooth transitions - no sudden jumps in time or location
+- Describe the process, not just the outcome
+- Use poetic Chinese web novel style language
+- Make every moment feel immersive and cinematic
+- Connect player action → immediate sensations → unfolding events → consequences → new situation
+- Do NOT include multiple scenarios or duplicate content  
+- Do NOT add explanatory text outside the JSON
+- Keep narrative focused but richly detailed
+
+GOLDEN FINGER EFFECTS (apply appropriately):
+- The System: Occasionally give quest rewards (bonus stats, items)
+- Grandpa in the Ring: Wisdom hints, emergency power (once per life)
+- Copycat Eye: See enemy stats, learn techniques from observation
+- Alchemy God Body: Pills have 2x effect, can refine pills perfectly
+- Memories of Past Lives: Prophetic warnings, hidden knowledge
+- Heavenly Demon Body: Gain power from killing, risk Heart Demons
+
+IMPORTANT:
+- Make stat gains feel earned through narrative
+- Combat should be exciting with technique usage
+- Pills should be used strategically
+- Cultivation takes time and effort
+- Be generous with small gains, stingy with big ones
+- Every 3-5 actions should advance something (stat, technique, item, cultivation)
+
+NARRATIVE STRUCTURE TEMPLATE:
+1. **Opening** (2-3 sentences): Set the scene with sensory details, connect to previous action
+2. **Action Unfolds** (4-6 sentences): Show the character performing the action step-by-step with rich details
+3. **Immediate Consequences** (2-3 sentences): Describe physical sensations, emotional reactions, environmental responses
+4. **Outcome & Hook** (1-2 sentences): State the result and hint at what comes next
+
+SENSORY DETAIL EXAMPLES:
+- Visual: "Moonlight painted silver streaks across the training yard" / "His eyes blazed with golden light"
+- Sound: "The whistle of wind through his fists" / "Distant thunder rumbled like an angry dragon"
+- Touch: "Cold sweat trickled down his spine" / "Qi burned through his meridians like liquid fire"
+- Smell: "The acrid scent of burnt incense" / "Fresh blood mixed with the earthy smell of rain"
+- Emotion: "Pride swelled in his chest" / "Humiliation burned hotter than any flame"
+
+TRANSITION PHRASES (use these to connect scenes):
+- "As the last echoes faded..." / "In that moment..." / "Without hesitation..."
+- "The night deepened as..." / "Hours passed in focused concentration..."
+- "Just as he completed the movement..." / "Before he could react..."`;
+
+export class DeepseekService {
+  private static buildSystemPrompt(
+    character: Character,
+    memoryContext: string,
+    npcContext: string,
+    techniquesList: string,
+    inventoryList: string
+  ): string {
+    return WUXIA_SYSTEM_PROMPT
+      .replace('{character_name}', character.name || 'Unknown')
+      .replace('{character_origin}', character.origin || 'Unknown')
+      .replace('{spirit_root}', character.spiritRoot || 'Unknown')
+      .replace('{realm}', character.realm || 'Mortal')
+      .replace('{cultivation_progress}', character.cultivationProgress?.toString() || '0')
+      .replace('{golden_finger}', character.goldenFinger?.name || 'None')
+      .replace('{strength}', character.stats?.strength?.toString() || '10')
+      .replace('{agility}', character.stats?.agility?.toString() || '10')
+      .replace('{intelligence}', character.stats?.intelligence?.toString() || '10')
+      .replace('{charisma}', character.stats?.charisma?.toString() || '10')
+      .replace('{luck}', character.stats?.luck?.toString() || '10')
+      .replace('{health}', character.health?.toString() || '100')
+      .replace('{max_health}', character.maxHealth?.toString() || '100')
+      .replace('{qi}', character.qi?.toString() || '0')
+      .replace('{max_qi}', character.maxQi?.toString() || '100')
+      .replace('{karma}', character.karma?.toString() || '0')
+      .replace('{location}', 'Starting Village') // Will be dynamic later
+      .replace('{chapter}', '1') // Will be dynamic later
+      .replace('{memory_context}', memoryContext)
+      .replace('{npc_context}', npcContext)
+      .replace('{techniques_list}', techniquesList)
+      .replace('{inventory_list}', inventoryList);
+  }
+
+  static async generateNarrative(
+    character: Character,
+    action: string,
+    context: {
+      recentMessages?: any[];
+      storyEvents?: any[];
+      npcRelationships?: any[];
+      techniques?: any[];
+      inventory?: any[];
+      language?: 'en' | 'id'; // Add language parameter
+    } = {}
+  ): Promise<DeepseekResponse> {
+    // Retry logic with exponential backoff
+    const maxRetries = 3;
+    let lastError: any = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await this._generateNarrativeAttempt(character, action, context);
+      } catch (error: any) {
+        lastError = error;
+        console.error(`Narrative generation attempt ${attempt} failed:`, error);
+        
+        // Check for specific error types that should be retried
+        const isNetworkError = error instanceof TypeError || 
+                              error.name === 'AbortError' ||
+                              error.message?.includes('fetch') ||
+                              error.message?.includes('network') ||
+                              error.message?.includes('ERR_HTTP2') ||
+                              error.message?.includes('Failed to fetch');
+        
+        const isServerError = error.message?.includes('server error') || 
+                             error.message?.includes('500') ||
+                             error.message?.includes('502') ||
+                             error.message?.includes('503');
+        
+        // Don't retry for auth or rate limit errors
+        if (error.message?.includes('Rate limit') || error.message?.includes('Invalid API key')) {
+          throw error;
+        }
+        
+        // Retry for network and server errors
+        if ((isNetworkError || isServerError) && attempt < maxRetries) {
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // Exponential backoff, max 5s
+          console.log(`Retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        
+        // If this was the last attempt, throw the error
+        if (attempt === maxRetries) {
+          throw error;
+        }
+      }
+    }
+    
+    // This should never be reached, but TypeScript needs it
+    throw lastError;
+  }
+
+  private static async _generateNarrativeAttempt(
+    character: Character,
+    action: string,
+    context: {
+      recentMessages?: any[];
+      storyEvents?: any[];
+      npcRelationships?: any[];
+      techniques?: any[];
+      inventory?: any[];
+      language?: 'en' | 'id';
+    } = {}
+  ): Promise<DeepseekResponse> {
+    try {
+      // Get language instruction
+      const language = context.language || 'en';
+      const languageInstruction = getLanguageInstruction(language);
+      
+      // Build context strings
+      const memoryContext = context.storyEvents && context.storyEvents.length > 0
+        ? context.storyEvents.map((e: any) => `[Ch.${e.chapter}] ${e.summary} (Importance: ${e.importance})`).join('\n')
+        : 'No significant events recorded yet.';
+
+      const npcContext = context.npcRelationships && context.npcRelationships.length > 0
+        ? context.npcRelationships.map((npc: any) => 
+            `${npc.npc_name}: Favor ${npc.favor}, Grudge ${npc.grudge}, Status: ${npc.status}${npc.last_interaction ? ` (Last: ${npc.last_interaction})` : ''}`
+          ).join('\n')
+        : 'No established relationships yet.';
+
+      const techniquesList = context.techniques && context.techniques.length > 0
+        ? context.techniques.map((t: any) => `- ${t.name} (${t.type}, ${t.rank} rank, ${t.mastery}% mastery, ${t.qi_cost} Qi)`).join('\n')
+        : 'No techniques learned yet.';
+
+      const inventoryList = context.inventory && context.inventory.length > 0
+        ? context.inventory.map((i: any) => `- ${i.name} x${i.quantity} (${i.rarity} ${i.type})${i.equipped ? ' [EQUIPPED]' : ''}`).join('\n')
+        : 'Empty inventory.';
+
+      // Build system prompt with language instruction
+      const systemPrompt = this.buildSystemPrompt(
+        character,
+        memoryContext,
+        npcContext,
+        techniquesList,
+        inventoryList
+      ) + `\n\n${languageInstruction}`;
+
+      // Build messages array
+      const messages = [
+        { role: 'system', content: systemPrompt },
+      ];
+
+      // Add recent conversation history for context
+      if (context.recentMessages && context.recentMessages.length > 0) {
+        const contextMessages = context.recentMessages.slice(-10).map((msg: any) => ({
+          role: msg.role === 'user' ? 'user' : 'assistant',
+          content: msg.content
+        }));
+        messages.push(...contextMessages);
+      }
+
+      // Add the current action with language reminder
+      messages.push({
+        role: 'user',
+        content: `Player Action: ${action}
+
+${languageInstruction}
+
+Respond with a JSON object following the specified format. 
+
+CRITICAL REQUIREMENTS:
+1. Write a rich, flowing narrative (150-250 words) that shows the scene unfolding step-by-step
+2. Use vivid sensory details - what does the character see, hear, feel, smell?
+3. Show smooth transitions - connect this action naturally to the previous scene
+4. Describe the PROCESS of the action, not just the result
+5. Use poetic Chinese web novel style with dramatic flair
+6. Make stat changes and progression feel meaningful and earned through the narrative
+7. NO sudden scene jumps - every moment should flow naturally into the next
+
+Example of good narrative flow:
+"The cold night air bit at your skin as you slipped away from the outer disciples' quarters. Moonlight filtered through ancient pine trees, casting dancing shadows across the secluded grove you'd discovered weeks ago. You took a deep breath, centering yourself, then began. The first punch was awkward—your stance too wide, your fist lacking conviction. But you persisted. Again. And again. Sweat began to bead on your forehead despite the chill. By the fiftieth repetition, your muscles screamed in protest, but something was changing. The movements became smoother, more natural. Your fist cut through the air with a sharp whistle. On the hundredth punch, you felt it—a faint stirring in your dantian, like a sleeping dragon opening one eye. Crude and unrefined, but undeniably there. Your first true touch of qi. A fierce grin spread across your face as you continued, pushing through the pain, each strike bringing you one step closer to true cultivation."`
+      });
+
+      console.log('Sending request to Deepseek API...');
+
+      // Add timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+      const response = await fetch(DEEPSEEK_API_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'deepseek-chat',
+          messages,
+          temperature: 0.8,
+          max_tokens: 3500,
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Deepseek API error:', response.status, errorText);
+        
+        if (response.status === 429) {
+          throw new Error('Rate limit exceeded. Please wait a moment before trying again.');
+        }
+        
+        if (response.status === 401) {
+          throw new Error('Invalid API key. Please check your Deepseek API configuration.');
+        }
+
+        throw new Error(`Deepseek API error: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      const aiContent = data.choices?.[0]?.message?.content;
+
+      console.log('Deepseek API Response received, parsing...');
+
+      // Try to parse JSON from the response
+      let parsedResponse: DeepseekResponse;
+      try {
+        console.log('Raw AI content:', aiContent);
+        
+        // Check if the entire response is already a valid JSON object
+        if (typeof aiContent === 'object' && aiContent !== null) {
+          console.log('AI content is already an object, using directly');
+          parsedResponse = aiContent as DeepseekResponse;
+          
+          if (!parsedResponse.narrative) {
+            throw new Error('Missing narrative field in AI response object');
+          }
+          
+          return parsedResponse;
+        }
+        
+        // Try multiple parsing strategies
+        let jsonStr = '';
+        
+        // Strategy 1: Look for JSON in code blocks
+        const codeBlockMatch = aiContent.match(/```json\n?([\s\S]*?)\n?```/);
+        if (codeBlockMatch) {
+          jsonStr = codeBlockMatch[1].trim();
+        } else {
+          // Strategy 2: Look for first complete JSON object
+          const jsonMatch = aiContent.match(/\{[\s\S]*?\}/);
+          if (jsonMatch) {
+            jsonStr = jsonMatch[0];
+          } else {
+            // Strategy 3: Try to extract from the entire content
+            jsonStr = aiContent.trim();
+          }
+        }
+        
+        // Clean up the JSON string
+        jsonStr = jsonStr
+          .replace(/^[^{]*/, '') // Remove everything before first {
+          .replace(/[^}]*$/, '') // Remove everything after last }
+          .trim();
+        
+        // Handle truncated JSON - try to fix common issues
+        if (jsonStr && !jsonStr.endsWith('}')) {
+          // Try to find the last complete object
+          const lastBraceIndex = jsonStr.lastIndexOf('}');
+          if (lastBraceIndex > 0) {
+            jsonStr = jsonStr.substring(0, lastBraceIndex + 1);
+          } else {
+            // If no closing brace found, try to add one
+            jsonStr += '}';
+          }
+        }
+        
+        console.log('Cleaned JSON string:', jsonStr);
+        
+        if (jsonStr.startsWith('{') && jsonStr.endsWith('}')) {
+          parsedResponse = JSON.parse(jsonStr);
+          
+          // Validate required fields
+          if (!parsedResponse.narrative) {
+            throw new Error('Missing narrative field in AI response');
+          }
+          
+          // Clean narrative - remove duplicate content
+          if (parsedResponse.narrative && typeof parsedResponse.narrative === 'string') {
+            // Split by common separators and take first coherent part
+            const narrativeParts = parsedResponse.narrative.split(/(?:\n\n|\. [A-Z])/);
+            if (narrativeParts.length > 1) {
+              // Take the first complete narrative part
+              parsedResponse.narrative = narrativeParts[0].trim();
+              if (!parsedResponse.narrative.endsWith('.') && !parsedResponse.narrative.endsWith('!') && !parsedResponse.narrative.endsWith('?')) {
+                parsedResponse.narrative += '.';
+              }
+            }
+          }
+          
+        } else {
+          throw new Error('Invalid JSON format');
+        }
+      } catch (parseError) {
+        console.error('Failed to parse Deepseek response as JSON:', parseError);
+        console.log('Raw AI content:', aiContent);
+        
+        // Check if aiContent itself is already a JSON string
+        if (typeof aiContent === 'string' && aiContent.trim().startsWith('{')) {
+          try {
+            // Try parsing the entire content as JSON
+            const directParse = JSON.parse(aiContent);
+            if (directParse.narrative) {
+              console.log('Successfully parsed aiContent directly as JSON');
+              parsedResponse = directParse;
+              return parsedResponse;
+            }
+          } catch (directParseError) {
+            console.log('Direct parse also failed');
+          }
+        }
+        
+        // Fallback to basic narrative response
+        // Extract just the text if it looks like JSON
+        let narrativeText = aiContent || 'The world responds to your action, but the heavens remain silent...';
+        
+        // If aiContent looks like JSON, try to extract narrative field
+        if (typeof narrativeText === 'string' && narrativeText.includes('"narrative"')) {
+          const narrativeMatch = narrativeText.match(/"narrative"\s*:\s*"([^"]+)"/);
+          if (narrativeMatch) {
+            narrativeText = narrativeMatch[1];
+          }
+        }
+        
+        parsedResponse = {
+          narrative: narrativeText,
+          system_message: null,
+          stat_changes: {},
+          cultivation_progress_change: 0,
+          new_techniques: [],
+          technique_mastery_changes: [],
+          new_items: [],
+          items_consumed: [],
+          npc_updates: [],
+          new_location: null,
+          time_passed: null,
+          event_to_remember: null,
+          suggested_actions: [
+            { text: 'Continue exploring', type: 'action' },
+            { text: 'Rest and meditate', type: 'action' },
+            { text: 'Look for opportunities', type: 'action' }
+          ],
+          is_death: false
+        };
+      }
+
+      console.log('Successfully processed Deepseek response');
+      return parsedResponse;
+
+    } catch (error) {
+      console.error('Error in Deepseek service:', error);
+      throw error;
+    }
+  }
+
+  static async generateFate(characterName: string, gender?: string, language: 'en' | 'id' = 'en'): Promise<any> {
+    const genderNote = gender ? `The character is ${gender.toLowerCase()}.` : 'The character can be any gender.';
+    const languageInstruction = getLanguageInstruction(language);
+    
+    const systemPrompt = `You are a Wuxia/Jianghu fate generator specializing in classical Chinese martial arts world storytelling. Generate origin stories set EXCLUSIVELY in ancient China's Jianghu (江湖) - the world of martial artists, sects, and cultivators.
+
+${languageInstruction}
+
+CRITICAL CHARACTER REQUIREMENTS:
+- The main character's name is EXACTLY "${characterName}" - DO NOT change or replace this name
+- ${genderNote}
+- Use this exact name throughout the entire backstory
+- Other NPCs (family, enemies, masters) should have different Chinese names
+
+CRITICAL SETTING REQUIREMENTS - The story MUST include:
+1. Chinese names for ALL NPCs (use pinyin, e.g., Li Wei, Zhang Feng, Chen Xiaoming) - but keep the main character as "${characterName}"
+2. Chinese locations (e.g., Huashan Mountain, Yangtze River, Jiangnan region, Luoyang city, Kunlun sect territory)
+3. Chinese cultural elements: sects (门派), martial families (武林世家), cultivation halls (修炼堂), medicine halls (医馆), teahouses (茶馆)
+4. Chinese concepts: face (面子), filial piety (孝), karma/fate (缘分), Dao (道), Qi (气)
+5. Wuxia terminology: inner strength (内力), meridians (经脉), martial arts manuals (武功秘籍), sect masters (掌门), elders (长老)
+
+AVOID these Western fantasy elements:
+- NO Western names or European-sounding locations
+- NO dragons, orcs, elves, or Western mythical creatures
+- NO wizards, mages, or Western magic systems
+- NO medieval European settings (castles, knights, etc.)
+
+The origin should follow classic Wuxia tropes:
+1. Tragic/humble beginning: orphan, destroyed sect, fallen noble family, servant, beggar
+2. Hidden potential: blocked meridians with immense latent power, mysterious birthmark, inherited martial arts manual, master's dying gift
+3. Motivation to enter Jianghu: revenge against rival sect, restore family honor, find missing parent, cure a poison, protect loved ones
+
+You must respond with ONLY valid JSON in this exact format:
+{
+  "title": "Short Chinese-flavored title (3-5 words, e.g., 'Fallen Phoenix Disciple', 'Orphan of Azure Cloud')",
+  "description": "One paragraph describing the origin in Jianghu context using the name ${characterName}",
+  "spiritRoot": "One of: Fire, Water, Earth, Wood, Metal, Lightning, Darkness, Light, Trash",
+  "backstory": "A detailed 2-3 paragraph backstory with Chinese names, locations, and Wuxia elements. The main character must be called ${characterName} throughout.",
+  "startingLocation": "Chinese location name (e.g., 'Qingfeng Village', 'Ruins of the Seven Stars Sect', 'Luoyang City Slums')",
+  "bonuses": {
+    "strength": 0,
+    "agility": 0,
+    "intelligence": 0,
+    "charisma": 0,
+    "luck": 0,
+    "cultivation": 0
+  },
+  "penalties": {
+    "strength": 0,
+    "agility": 0,
+    "intelligence": 0,
+    "charisma": 0,
+    "luck": 0,
+    "cultivation": 0
+  }
+}
+
+Rules for bonuses/penalties:
+- Total bonus points should be 3-5
+- Total penalty points should be 1-3 (as negative numbers)
+- "Trash" spirit root should have cultivation penalty of -3 to -5 but luck bonus of +2 to +3 (classic underdog trope)
+- Make bonuses and penalties match the backstory logically (e.g., orphan raised by beggars = high agility but low charisma)`;
+
+    // Retry logic with exponential backoff
+    const maxRetries = 3;
+    let lastError: any = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`Calling Deepseek API for fate generation (attempt ${attempt}/${maxRetries})...`);
+        
+        // Add timeout to prevent hanging
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+        
+        const response = await fetch(DEEPSEEK_API_URL, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'deepseek-chat',
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: `Generate a dramatic Jianghu origin story for a cultivator named "${characterName}". ${gender ? `The character is ${gender.toLowerCase()}.` : ''} The story must be set in ancient China's martial world (Jianghu/江湖) with Chinese names, Chinese locations, and authentic Wuxia elements. Make it tragic, full of potential for greatness, and ready for a journey of cultivation and martial arts mastery. IMPORTANT: The main character must be called "${characterName}" throughout the entire story - do not change this name.
+
+${languageInstruction}` }
+            ],
+            temperature: 0.9,
+            max_tokens: 1500,
+          }),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Deepseek API error:', response.status, errorText);
+          
+          if (response.status === 429) {
+            throw new Error('Rate limit exceeded. Please wait a moment and try again.');
+          }
+          
+          if (response.status === 401) {
+            throw new Error('Invalid API key. Please check your Deepseek configuration.');
+          }
+          
+          if (response.status >= 500) {
+            // Server error - retry
+            throw new Error(`Deepseek server error: ${response.status}`);
+          }
+          
+          throw new Error(`Deepseek API error: ${response.status} - ${errorText}`);
+        }
+
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content || '';
+        
+        console.log('Deepseek response received, parsing...');
+        
+        // Parse JSON from response
+        let origin;
+        try {
+          const jsonMatch = content.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            origin = JSON.parse(jsonMatch[0]);
+          } else {
+            throw new Error('No JSON found in response');
+          }
+        } catch (parseError) {
+          console.error('Parse error:', parseError, 'Content:', content);
+          // Fallback origin
+          origin = {
+            title: 'Wanderer of Lost Memories',
+            description: 'You awaken beside the banks of the Yangtze River with no memory of your past. Only a jade pendant and fragments of martial arts techniques remain in your mind.',
+            spiritRoot: 'Trash',
+            backstory: `${characterName} awakens at the shores of the Yangtze River (长江) with no memory of their past life. An old fisherman named Wang Bo found them unconscious among the reeds, with only a mysterious jade pendant bearing the symbol of a long-destroyed sect. Though the local medicine hall's physician declared their meridians completely blocked, sometimes in dreams, ${characterName} sees flashes of profound martial arts techniques and hears the voice of a stern master calling their name.`,
+            startingLocation: 'Qingfeng Fishing Village (清风渔村)',
+            bonuses: { luck: 3, intelligence: 2 },
+            penalties: { cultivation: -3 },
+          };
+        }
+
+        console.log('Fate generation successful');
+        return origin;
+        
+      } catch (error: any) {
+        lastError = error;
+        console.error(`Attempt ${attempt} failed:`, error);
+        
+        // Check for specific error types
+        const isNetworkError = error instanceof TypeError || 
+                              error.name === 'AbortError' ||
+                              error.message?.includes('fetch') ||
+                              error.message?.includes('network') ||
+                              error.message?.includes('ERR_HTTP2');
+        
+        const isServerError = error.message?.includes('server error') || 
+                             error.message?.includes('500') ||
+                             error.message?.includes('502') ||
+                             error.message?.includes('503');
+        
+        // Don't retry for auth or rate limit errors
+        if (error.message?.includes('Rate limit') || error.message?.includes('Invalid API key')) {
+          throw error;
+        }
+        
+        // Retry for network and server errors
+        if ((isNetworkError || isServerError) && attempt < maxRetries) {
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // Exponential backoff, max 5s
+          console.log(`Retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        
+        // If this was the last attempt, throw the error
+        if (attempt === maxRetries) {
+          break;
+        }
+      }
+    }
+    
+    // If all retries failed, provide a fallback
+    console.error('All retry attempts failed, using fallback origin');
+    console.error('Last error:', lastError);
+    
+    // Return a fallback origin instead of throwing
+    return {
+      title: 'Wanderer of Lost Memories',
+      description: `${characterName} awakens beside the banks of the Yangtze River with no memory of the past. Only a jade pendant and fragments of martial arts techniques remain.`,
+      spiritRoot: 'Trash',
+      backstory: `${characterName} awakens at the shores of the Yangtze River (长江) with no memory of ${gender === 'Female' ? 'her' : 'his'} past life. An old fisherman named Wang Bo found ${gender === 'Female' ? 'her' : 'him'} unconscious among the reeds, with only a mysterious jade pendant bearing the symbol of a long-destroyed sect. Though the local medicine hall's physician declared ${gender === 'Female' ? 'her' : 'his'} meridians completely blocked, sometimes in dreams, ${characterName} sees flashes of profound martial arts techniques and hears the voice of a stern master calling ${gender === 'Female' ? 'her' : 'his'} name.`,
+      startingLocation: 'Qingfeng Fishing Village (清风渔村)',
+      bonuses: { luck: 3, intelligence: 2 },
+      penalties: { cultivation: -3 },
+    };
+  }
+
+  static async generateTutorial(params: {
+    characterName: string;
+    gender?: string;
+    origin: any;
+    goldenFinger: any;
+    currentStep: number;
+    previousChoice?: string;
+    tutorialHistory?: string;
+    language?: 'en' | 'id';
+  }): Promise<any> {
+    const { characterName, gender, origin, goldenFinger, currentStep, previousChoice, tutorialHistory, language = 'en' } = params;
+
+    console.log('=== DEEPSEEK TUTORIAL GENERATION ===');
+    console.log('Character:', characterName);
+    console.log('Golden Finger:', goldenFinger);
+    console.log('Current Step:', currentStep);
+    console.log('Previous Choice:', previousChoice);
+
+    const goldenFingerScenarios: Record<string, string> = {
+      'system': `The player awakens a game-like System that provides quests and rewards. 
+        The System should introduce itself mechanically, explain daily quests, and give a simple first quest.
+        The tutorial ends when the System is fully bound and the first quest is accepted.`,
+      'grandpa': `The player finds an ancient ring containing a powerful soul from ancient times.
+        The grandpa should be wise but eccentric, test the player's determination, and offer guidance.
+        The tutorial ends when the grandpa accepts the player as a successor.`,
+      'copycat': `The player's eyes mutate to see through techniques and copy them.
+        They should witness a technique, feel the burning in their eyes, and successfully copy something.
+        The tutorial ends when they master basic control of the Copycat Eye.`,
+      'alchemy': `The player is poisoned but their body converts the poison to power.
+        They discover they can sense pill ingredients and refine medicines naturally.
+        The tutorial ends when they successfully absorb/refine their first substance.`,
+      'reincarnator': `The player experiences flashbacks from past lives.
+        These memories reveal crucial knowledge that saves them from danger.
+        The tutorial ends when they accept and integrate memories from a past life.`,
+      'heavenly-demon': `Dark energy awakens within the player during a moment of rage.
+        They must choose to embrace or resist the demonic power within.
+        The tutorial ends when they accept the Heavenly Demon constitution.`,
+      'azure-dragon': `Dragon bloodline awakens, manifesting scales and overwhelming pressure.
+        An ancient dragon consciousness may speak to guide them.
+        The tutorial ends when they achieve initial bloodline awakening.`,
+      'time-reversal': `The player dies but time reverses, giving them another chance.
+        They must make different choices to survive this time.
+        The tutorial ends when they understand the Karmic Time Wheel.`,
+      'merchant': `A mystical shop interface appears only to the player.
+        They can browse items from across dimensions and make their first trade.
+        The tutorial ends when they complete their first transaction.`,
+      'sword-spirit': `An ancient sword spirit chooses the player as their host.
+        The spirit tests their sword intent and teaches basic sword manifestation.
+        The tutorial ends when they form a bond with the sword spirit.`,
+      'heaven-eye': `A third eye painfully opens, revealing hidden truths.
+        They see through an illusion or detect a hidden treasure.
+        The tutorial ends when they learn to control the Heaven Defying Eye.`,
+      'soul-palace': `During meditation, the player enters a vast soul palace in their mind.
+        They explore the first layer and discover its protective powers.
+        The tutorial ends when they claim the Soul Palace as their own.`,
+      'body-refiner': `The player's body refuses to break, hardening beyond normal limits.
+        They test their new physical prowess and understand body refinement.
+        The tutorial ends when they embrace the path of body cultivation.`,
+      'fate-plunderer': `After defeating someone, their luck flows into the player.
+        They experience immediate fortune and understand the karmic risks.
+        The tutorial ends when they grasp the power of fate plundering.`,
+      'poison-king': `A deadly poison becomes nourishment instead of death.
+        The player learns to sense, absorb, and weaponize toxins.
+        The tutorial ends when they embrace the path of poison.`,
+    };
+
+    const scenarioContext = goldenFingerScenarios[goldenFinger.id] || 'The player discovers their unique golden finger ability.';
+    const languageInstruction = getLanguageInstruction(language);
+
+    const systemPrompt = `You are a Wuxia/Xianxia narrative AI generating a tutorial scenario for awakening a Golden Finger ability.
+
+${languageInstruction}
+
+CHARACTER CONTEXT:
+- Name: ${characterName} (use this exact name throughout)
+- ${gender ? `Gender: ${gender}` : 'Gender: Not specified'}
+- Origin: ${origin.title}
+- Origin Backstory: ${origin.backstory || origin.description}
+- Golden Finger: ${goldenFinger.name}
+- Golden Finger Description: ${goldenFinger.description}
+- Golden Finger Effect: ${goldenFinger.effect}
+
+SCENARIO REQUIREMENTS:
+${scenarioContext}
+
+CURRENT STEP: ${currentStep + 1}/5
+${previousChoice ? `PLAYER'S PREVIOUS CHOICE: ${previousChoice}` : 'This is the first step.'}
+
+${tutorialHistory ? `STORY SO FAR:\n${tutorialHistory}` : ''}
+
+RULES:
+1. Generate immersive Wuxia narrative (100-200 words) - SINGLE coherent story only
+2. Use the character name "${characterName}" throughout - do not change it
+3. ${gender ? `The character is ${gender.toLowerCase()}, use appropriate pronouns` : 'Use gender-neutral language if gender not specified'}
+4. Provide exactly 3 choices for the player
+5. Each choice should lead to different outcomes
+6. On step 5, the golden finger should fully awaken
+7. Maintain dramatic tension and Wuxia atmosphere
+8. Use classic tropes: face slapping, coughing blood, jade beauties, arrogant young masters
+9. CRITICAL: Respond with ONLY ONE JSON object - no additional text or multiple narratives
+
+RESPONSE FORMAT - You must respond with EXACTLY this JSON structure and NOTHING ELSE:
+{
+  "narrative": "Single coherent story paragraph (100-200 words max)",
+  "choices": [
+    {"id": "choice1", "text": "Choice description", "outcome": "progress"},
+    {"id": "choice2", "text": "Choice description", "outcome": "progress"},
+    {"id": "choice3", "text": "Choice description", "outcome": "branch"}
+  ],
+  "isAwakening": false,
+  "statChanges": {
+    "qi": 0,
+    "health": 0,
+    "karma": 0
+  }
+}
+
+IMPORTANT CONSTRAINTS:
+- narrative field must contain ONLY ONE story segment
+- Do NOT include multiple scenarios or duplicate content
+- Do NOT add explanatory text outside the JSON
+- Keep narrative focused and concise
+
+For the final step (step 5), set "isAwakening": true and describe the dramatic moment of power awakening.`;
+
+    try {
+      console.log('Sending request to Deepseek API...');
+      const response = await fetch(DEEPSEEK_API_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'deepseek-chat',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `Generate step ${currentStep + 1} of the tutorial scenario for ${characterName}'s ${goldenFinger.name} awakening.${gender ? ` The character is ${gender.toLowerCase()}.` : ''}${previousChoice ? ` They chose: "${previousChoice}"` : ' This is the beginning of their journey.'} Remember to use the name "${characterName}" throughout the story.
+
+${languageInstruction}` }
+          ],
+          temperature: 0.8,
+          max_tokens: 1500,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Deepseek API error:', response.status, errorText);
+        throw new Error(`Deepseek API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || '';
+      
+      console.log('Deepseek API response received');
+      console.log('Raw content:', content);
+      
+      let tutorialStep;
+      try {
+        console.log('Attempting to parse JSON...');
+        console.log('Full raw content length:', content.length);
+        
+        // Try multiple parsing strategies
+        let jsonStr = '';
+        
+        // Strategy 1: Look for JSON in code blocks
+        const codeBlockMatch = content.match(/```json\n?([\s\S]*?)\n?```/);
+        if (codeBlockMatch) {
+          jsonStr = codeBlockMatch[1].trim();
+          console.log('Found JSON in code block');
+        } else {
+          // Strategy 2: Use the entire content as it should be pure JSON
+          jsonStr = content.trim();
+          console.log('Using entire content as JSON');
+        }
+        
+        console.log('JSON string length before cleaning:', jsonStr.length);
+        console.log('JSON string preview:', jsonStr.substring(0, 200) + '...');
+        
+        // Validate that we have a complete JSON object
+        if (!jsonStr.startsWith('{')) {
+          throw new Error('Response does not start with {');
+        }
+        
+        // Try to parse as-is first
+        try {
+          tutorialStep = JSON.parse(jsonStr);
+          console.log('Successfully parsed JSON on first try');
+        } catch (firstParseError) {
+          console.log('First parse failed, trying to fix JSON...');
+          
+          // If parsing fails, try to fix common issues
+          let braceCount = 0;
+          let lastValidIndex = -1;
+          
+          for (let i = 0; i < jsonStr.length; i++) {
+            if (jsonStr[i] === '{') braceCount++;
+            if (jsonStr[i] === '}') braceCount--;
+            if (braceCount === 0 && i > 0) {
+              lastValidIndex = i;
+              break;
+            }
+          }
+          
+          if (lastValidIndex > 0) {
+            const fixedJson = jsonStr.substring(0, lastValidIndex + 1);
+            console.log('Trying fixed JSON:', fixedJson.substring(0, 200) + '...');
+            tutorialStep = JSON.parse(fixedJson);
+            console.log('Successfully parsed fixed JSON');
+          } else {
+            throw firstParseError;
+          }
+        }
+        
+        // Validate required fields
+        if (!tutorialStep.narrative || !tutorialStep.choices) {
+          throw new Error('Missing required fields in AI response');
+        }
+        
+        console.log('Parsed tutorial step:', {
+          narrative: tutorialStep.narrative.substring(0, 100) + '...',
+          choicesCount: tutorialStep.choices?.length || 0,
+          isAwakening: tutorialStep.isAwakening
+        });
+        
+        // Clean narrative - remove duplicate content
+        if (tutorialStep.narrative && typeof tutorialStep.narrative === 'string') {
+          // Split by common separators and take first coherent part
+          const narrativeParts = tutorialStep.narrative.split(/(?:\n\n|\. [A-Z])/);
+          if (narrativeParts.length > 1) {
+            // Take the first complete narrative part
+            tutorialStep.narrative = narrativeParts[0].trim();
+            if (!tutorialStep.narrative.endsWith('.') && !tutorialStep.narrative.endsWith('!') && !tutorialStep.narrative.endsWith('?')) {
+              tutorialStep.narrative += '.';
+            }
+          }
+        }
+        
+      } catch (parseError) {
+        console.error('Parse error:', parseError);
+        console.log('Failed content preview:', content.substring(0, 500));
+        // Don't provide fallback here - let the calling component handle it
+        throw new Error(`Failed to parse AI response: ${parseError.message}`);
+      }
+
+      console.log('Returning tutorial step:', tutorialStep);
+      return tutorialStep;
+    } catch (error) {
+      console.error('Generate tutorial error:', error);
+      throw error;
+    }
+  }
+}
+
+// Helper function to generate contextual awakening narrative
+function generateContextualAwakeningNarrative(
+  characterName: string, 
+  goldenFinger: any, 
+  origin: any, 
+  gender?: string
+): string {
+  const pronoun = gender === 'Female' ? 'her' : 'his';
+  const pronounSubject = gender === 'Female' ? 'she' : 'he';
+  
+  // Base scenarios for different Golden Fingers
+  const scenarios: Record<string, string> = {
+    'system': `${characterName} kneels in despair when suddenly, ethereal blue text materializes before ${pronoun} eyes. A mechanical voice echoes: "System initialization... Host compatibility detected. Welcome to The System." The world will never be the same.`,
+    
+    'grandpa': `As ${characterName} clutches an ancient ring found among ${pronoun} belongings, it suddenly grows warm. An aged voice speaks from within: "Finally, a worthy successor. I am the spirit of Grand Master Chen, and I shall guide you to power beyond imagination."`,
+    
+    'copycat': `${characterName} witnesses a senior disciple practicing sword techniques. Suddenly, ${pronoun} eyes burn with strange fire, and ${pronounSubject} can see the very essence of the technique—every movement, every qi flow, perfectly clear and copyable.`,
+    
+    'alchemy': `Forced to consume a poison meant to kill ${pronoun}, ${characterName} feels ${pronoun} body transforming the toxin into pure energy. ${pronounSubject.charAt(0).toUpperCase() + pronounSubject.slice(1)} has awakened the legendary Alchemy God Body.`,
+    
+    'reincarnator': `Fragments of memories flood ${characterName}'s mind—lives ${pronounSubject} never lived, techniques ${pronounSubject} never learned. The memories of countless past incarnations awaken, bringing with them ancient wisdom and power.`,
+    
+    'heavenly-demon': `In a moment of rage and despair, dark energy erupts from ${characterName}'s very soul. The Heavenly Demon bloodline stirs, offering immense power at a terrible price. Will ${pronounSubject} embrace the darkness?`,
+    
+    'azure-dragon': `${characterName} feels ${pronoun} blood burning like molten gold. Scales shimmer beneath ${pronoun} skin as the roar of an ancient Azure Dragon echoes in ${pronoun} soul. The divine bloodline awakens after millennia of slumber.`,
+    
+    'time-reversal': `As death approaches ${characterName}, time itself seems to bend to ${pronoun} will. The moment reverses, and ${pronounSubject} stands again, seconds before disaster. The Karmic Time Wheel has chosen its master.`,
+    
+    'merchant': `A translucent shop interface appears before ${characterName}, invisible to all others. A cheerful voice announces: "Welcome, valued customer, to the Heavenly Merchant System! Your journey to wealth and power begins now!"`,
+    
+    'sword-spirit': `An ancient, broken sword calls to ${characterName}. As ${pronoun} blood touches the blade, a feminine voice speaks: "I am the Primordial Sword Spirit. You shall be my inheritor, and together we will cut through the heavens themselves."`,
+    
+    'heaven-eye': `Agony splits ${characterName}'s forehead as a third eye painfully opens. Suddenly, ${pronounSubject} can see through all illusions, perceive hidden treasures, and witness the true nature of cultivation itself.`,
+    
+    'soul-palace': `In deep meditation, ${characterName} discovers a vast palace within ${pronoun} own mind. Nine layers of ancient halls stretch before ${pronoun}, each containing unimaginable secrets and power.`,
+    
+    'body-refiner': `${characterName}'s body refuses to break under punishment. Where bones should shatter, they strengthen like divine metal. The path of the Indestructible Vajra Body opens before ${pronoun}.`,
+    
+    'fate-plunderer': `As ${characterName} defeats an enemy, their luck and fortune flow into ${pronoun} like a river. ${pronounSubject.charAt(0).toUpperCase() + pronounSubject.slice(1)} has awakened the terrifying power to steal fate itself.`,
+    
+    'poison-king': `The assassin's poison should have killed ${characterName} instantly. Instead, ${pronounSubject} feels stronger, more alive. Every toxin in the world shall become ${pronoun} nourishment and weapon.`
+  };
+  
+  // Get scenario for the specific golden finger, or use generic
+  const scenario = scenarios[goldenFinger.id] || scenarios['system'];
+  
+  // Add origin context if available
+  if (origin && origin.title && origin.title !== 'Unknown') {
+    const originContext = getOriginContext(origin.title, characterName, pronoun);
+    return `${originContext} ${scenario}`;
+  }
+  
+  return scenario;
+}
+
+// Helper function to add origin context
+function getOriginContext(originTitle: string, characterName: string, pronoun: string): string {
+  const contexts: Record<string, string> = {
+    'Broken Meridians': `Despite ${pronoun} shattered meridians and the scorn of ${pronoun} family,`,
+    'Orphan Slave': `From the depths of slavery and suffering,`,
+    'Fallen Noble': `Among the ashes of ${pronoun} destroyed family,`,
+    'Sect Janitor': `While scrubbing floors as the sect's lowliest servant,`,
+    'Trash Disciple': `Branded as worthless by all who knew ${pronoun},`
+  };
+  
+  return contexts[originTitle] || `In ${pronoun} moment of greatest despair,`;
+}

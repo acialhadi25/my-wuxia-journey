@@ -1,0 +1,223 @@
+import { Character, getRarityColor, getRankColor } from '@/types/game';
+import { cn } from '@/lib/utils';
+import { Heart, Zap, Calendar, Mountain, Sparkles, X, Swords, Scroll, Package } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
+
+type StatusPanelProps = {
+  character: Character;
+  isOpen: boolean;
+  onClose: () => void;
+};
+
+export function StatusPanel({ character, isOpen, onClose }: StatusPanelProps) {
+  const healthPercentage = (character.health / character.maxHealth) * 100;
+  const qiPercentage = (character.qi / character.maxQi) * 100;
+  const cultivationProgress = character.cultivationProgress || 0;
+
+  const getHealthColor = () => {
+    if (healthPercentage > 60) return 'bg-jade';
+    if (healthPercentage > 30) return 'bg-gold';
+    return 'bg-blood';
+  };
+
+  return (
+    <div
+      className={cn(
+        "fixed inset-y-0 right-0 w-[340px] max-w-[90vw] bg-black/90 backdrop-blur-xl border-l border-white/10",
+        "transform transition-transform duration-300 ease-out z-50",
+        "flex flex-col shadow-2xl",
+        isOpen ? "translate-x-0" : "translate-x-full"
+      )}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 sm:p-5 border-b border-white/10 bg-black/50">
+        <h2 className="font-display text-xl text-gold">Status</h2>
+        <Button variant="ghost" size="icon" onClick={onClose} className="text-white/70 hover:text-white hover:bg-white/10">
+          <X className="w-5 h-5" />
+        </Button>
+      </div>
+
+      {/* Content */}
+      <ScrollArea className="flex-1">
+        <div className="p-4 sm:p-5 space-y-6">
+          {/* Character Info */}
+          <div className="text-center space-y-2 pb-4 border-b border-white/10">
+            <h3 className="font-display text-2xl text-gold-gradient">{character.name}</h3>
+            <p className="text-sm text-white/60">{character.origin}</p>
+            <div className="flex items-center justify-center gap-2 text-sm bg-jade/20 py-2 px-4 rounded-lg inline-flex mx-auto">
+              <Mountain className="w-4 h-4 text-jade-glow" />
+              <span className="text-jade-glow font-display">{character.realm}</span>
+            </div>
+          </div>
+
+          {/* Bars */}
+          <div className="space-y-4 p-4 rounded-xl bg-white/5 border border-white/10">
+            {/* Health */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="flex items-center gap-2 text-white/70">
+                  <Heart className="w-4 h-4 text-red-400" /> Health
+                </span>
+                <span className="text-white">{character.health}/{character.maxHealth}</span>
+              </div>
+              <div className="h-3 bg-black/50 rounded-full overflow-hidden">
+                <div
+                  className={cn("h-full transition-all duration-500 rounded-full", getHealthColor())}
+                  style={{ width: `${healthPercentage}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Qi */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="flex items-center gap-2 text-white/70">
+                  <Zap className="w-4 h-4 text-purple-400" /> Qi
+                </span>
+                <span className="text-white">{character.qi}/{character.maxQi}</span>
+              </div>
+              <div className="h-3 bg-black/50 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-purple-500 to-purple-400 transition-all duration-500 rounded-full"
+                  style={{ width: `${qiPercentage}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Cultivation Progress */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="flex items-center gap-2 text-white/70">
+                  <Sparkles className="w-4 h-4 text-gold" /> Cultivation
+                </span>
+                <span className={cn("text-white", character.breakthroughReady && 'text-gold animate-pulse')}>
+                  {cultivationProgress}%{character.breakthroughReady ? ' ⚡' : ''}
+                </span>
+              </div>
+              <div className="h-3 bg-black/50 rounded-full overflow-hidden">
+                <div
+                  className={cn("h-full transition-all duration-500 rounded-full", character.breakthroughReady ? 'bg-gradient-to-r from-gold to-yellow-300 animate-pulse' : 'bg-gradient-to-r from-gold to-yellow-500')}
+                  style={{ width: `${cultivationProgress}%` }}
+                />
+              </div>
+              {character.breakthroughReady && (
+                <p className="text-xs text-gold text-center font-display">✨ Ready for Breakthrough! ✨</p>
+              )}
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div className="space-y-3">
+            <h4 className="text-sm font-display text-gold/80">Attributes</h4>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              {Object.entries(character.stats).slice(0, 5).map(([stat, value]) => (
+                <div key={stat} className="flex justify-between p-3 bg-white/5 rounded-lg border border-white/10">
+                  <span className="text-white/60 capitalize">{stat}</span>
+                  <span className="text-white font-medium">{value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Techniques */}
+          <div className="space-y-2">
+            <h4 className="text-sm font-display text-muted-foreground flex items-center gap-1">
+              <Swords className="w-4 h-4" /> Techniques ({character.techniques?.length || 0})
+            </h4>
+            {character.techniques && character.techniques.length > 0 ? (
+              <div className="space-y-2">
+                {character.techniques.map((tech) => (
+                  <div key={tech.id} className="p-2 bg-muted/50 rounded border border-border">
+                    <div className="flex justify-between items-start">
+                      <span className={cn("font-medium text-sm", getRankColor(tech.rank))}>
+                        {tech.name}
+                      </span>
+                      <span className="text-xs text-muted-foreground">{tech.mastery}%</span>
+                    </div>
+                    <div className="h-1 bg-muted rounded-full mt-1 overflow-hidden">
+                      <div className="h-full bg-spirit" style={{ width: `${tech.mastery}%` }} />
+                    </div>
+                    <div className="flex gap-2 mt-1 text-xs text-muted-foreground">
+                      <span>{tech.rank}</span>
+                      {tech.element && <span>• {tech.element}</span>}
+                      <span>• {tech.qiCost} Qi</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground italic">No techniques learned yet.</p>
+            )}
+          </div>
+
+          {/* Inventory */}
+          <div className="space-y-2">
+            <h4 className="text-sm font-display text-muted-foreground flex items-center gap-1">
+              <Package className="w-4 h-4" /> Inventory ({character.inventory?.length || 0})
+            </h4>
+            {character.inventory && character.inventory.length > 0 ? (
+              <div className="space-y-1">
+                {character.inventory.map((item) => (
+                  <div key={item.id} className="p-2 bg-muted/50 rounded flex justify-between items-center">
+                    <div>
+                      <span className={cn("text-sm", getRarityColor(item.rarity))}>
+                        {item.name}
+                      </span>
+                      {item.equipped && <span className="text-xs text-gold ml-1">[E]</span>}
+                    </div>
+                    <span className="text-xs text-muted-foreground">x{item.quantity}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground italic">Inventory is empty.</p>
+            )}
+          </div>
+
+          {/* Life Info */}
+          <div className="space-y-2">
+            <h4 className="text-sm font-display text-muted-foreground">Life</h4>
+            <div className="flex items-center gap-2 text-sm p-2 bg-muted/50 rounded">
+              <Calendar className="w-4 h-4 text-muted-foreground" />
+              <span>Age: {character.stats.currentAge} / {character.stats.lifespan}</span>
+            </div>
+            <div className="text-sm p-2 bg-muted/50 rounded">
+              <span className="text-muted-foreground">Karma: </span>
+              <span className={character.karma >= 0 ? 'text-jade-glow' : 'text-blood'}>
+                {character.karma >= 0 ? '+' : ''}{character.karma}
+              </span>
+            </div>
+          </div>
+
+          {/* Golden Finger */}
+          <div className="space-y-2">
+            <h4 className="text-sm font-display text-muted-foreground">Golden Finger</h4>
+            <div className="p-3 bg-gold/10 border border-gold/20 rounded-lg">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-lg">{character.goldenFinger.icon}</span>
+                <span className="font-display text-gold">{character.goldenFinger.name}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">{character.goldenFinger.effect}</p>
+            </div>
+          </div>
+
+          {/* Spirit Root */}
+          <div className="space-y-2">
+            <h4 className="text-sm font-display text-muted-foreground">Spirit Root</h4>
+            <div className={cn(
+              "p-3 rounded-lg border",
+              character.spiritRoot === 'Trash' 
+                ? 'bg-blood/10 border-blood/20' 
+                : 'bg-jade/10 border-jade/20'
+            )}>
+              <span className={character.spiritRoot === 'Trash' ? 'text-blood' : 'text-jade-glow'}>
+                {character.spiritRoot} Root
+              </span>
+            </div>
+          </div>
+        </div>
+      </ScrollArea>
+    </div>
+  );
+}
