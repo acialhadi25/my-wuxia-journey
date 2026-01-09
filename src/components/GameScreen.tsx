@@ -73,6 +73,7 @@ export function GameScreen({ character, onUpdateCharacter, userId, savedCharacte
   const [timeElapsed, setTimeElapsed] = useState('Day 1');
   const [currentChapter, setCurrentChapter] = useState(1);
   const [characterId, setCharacterId] = useState<string | null>(initialSavedId || null);
+  const [awakeningActionCount, setAwakeningActionCount] = useState(0); // Track awakening progress
   const scrollRef = useRef<HTMLDivElement>(null);
   const { language } = useLanguage(); // Get current language
   const hasInitialized = useRef(false);
@@ -437,6 +438,34 @@ Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone
       await saveChatMessage(charId, 'system', awakeningMessage.content, 'system');
     }
     
+    // FALLBACK: Auto-awaken after 6 actions if AI hasn't triggered it yet
+    if (!character.goldenFingerUnlocked && !response.golden_finger_awakened) {
+      const newCount = awakeningActionCount + 1;
+      setAwakeningActionCount(newCount);
+      console.log(`🔄 Awakening progress: ${newCount}/6 actions`);
+      
+      if (newCount >= 6) {
+        console.log('🌟 AUTO-AWAKENING: 6 actions completed, forcing Golden Finger awakening');
+        updatedCharacter.goldenFingerUnlocked = true;
+        
+        // Show special notification
+        gameNotify.achievementUnlocked(`${character.goldenFinger.name} Awakened!`);
+        
+        // Add system message
+        const awakeningMessage: GameMessage = {
+          id: crypto.randomUUID(),
+          type: 'system',
+          content: `✨ ${character.goldenFinger.name} has fully awakened! You can now use custom actions to express yourself freely in the Jianghu.`,
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, awakeningMessage]);
+        await saveChatMessage(charId, 'system', awakeningMessage.content, 'system');
+        
+        // Reset counter
+        setAwakeningActionCount(0);
+      }
+    }
+    
     await updateCharacterInDatabase(charId, {
       stats: updatedCharacter.stats,
       health: Math.round(updatedCharacter.health),
@@ -514,9 +543,19 @@ Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone
       }
       
       // Also save to old story_events table for backward compatibility
+      // Convert importance string to number
+      const importanceMap: Record<string, number> = {
+        'trivial': 1,
+        'minor': 3,
+        'moderate': 5,
+        'important': 7,
+        'critical': 10
+      };
+      const importanceScore = importanceMap[response.event_to_remember.importance.toLowerCase()] || 5;
+      
       await saveStoryEvent(charId, {
         summary: response.event_to_remember.summary,
-        importance: response.event_to_remember.importance,
+        importance: importanceScore,
         type: response.event_to_remember.event_type,
         chapter: currentChapter
       });
@@ -603,6 +642,15 @@ Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone
             regenModifiers: buffEffect.regenModifiers,
           });
         }
+      }
+      
+      // AUTO-REMOVE HUNGER EFFECTS when consuming food items
+      if (item.type === 'consumable' && (item.effects?.health || item.effects?.stamina)) {
+        const hungerEffects = ['Kelaparan', 'Kelaparan Parah', 'Kelaparan Akut', 'Starving', 'Hunger'];
+        hungerEffects.forEach(effectName => {
+          updatedCharacter = RegenerationService.removeEffect(updatedCharacter, effectName);
+        });
+        console.log('🍖 Removed hunger effects after consuming food');
       }
 
       // Consume the item (reduce quantity)

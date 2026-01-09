@@ -1279,7 +1279,6 @@ Example of good narrative flow:
       } catch (parseError) {
         console.error('Failed to parse Deepseek response as JSON:', parseError);
         console.log('Raw AI content (first 1000 chars):', aiContent?.substring(0, 1000));
-        console.log('Attempted to parse:', jsonStr?.substring(0, 500));
         
         // Try more aggressive JSON extraction
         if (typeof aiContent === 'string') {
