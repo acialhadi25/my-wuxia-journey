@@ -137,6 +137,8 @@ export function CharacterCreation({ onComplete, onBack, userId }: CharacterCreat
       maxQi: 50,
       health: 100,
       maxHealth: 100,
+      stamina: 100 + (baseStats.strength * 5), // Initial stamina based on strength
+      maxStamina: 100 + (baseStats.strength * 5),
       karma: 0,
       cultivationProgress: 0,
       breakthroughReady: false,

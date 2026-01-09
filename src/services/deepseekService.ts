@@ -8,6 +8,7 @@ export type DeepseekResponse = {
   stat_changes?: {
     health?: number;
     qi?: number;
+    stamina?: number;
     karma?: number;
     strength?: number;
     agility?: number;
@@ -64,14 +65,17 @@ export type DeepseekResponse = {
     regenModifiers?: {
       healthRegen?: number;
       qiRegen?: number;
+      staminaRegen?: number;
     };
     damageOverTime?: {
       healthDamage?: number;
       qiDrain?: number;
+      staminaDrain?: number;
     };
     maxStatModifiers?: {
       maxHealth?: number;
       maxQi?: number;
+      maxStamina?: number;
     };
     isPermanent?: boolean;
     stackable?: boolean;
@@ -181,6 +185,7 @@ CHARACTER CONTEXT:
 - Current Stats: STR:{strength} AGI:{agility} INT:{intelligence} CHA:{charisma} LCK:{luck}
 - Health: {health}/{max_health}
 - Qi: {qi}/{max_qi}
+- Stamina: {stamina}/{max_stamina}
 - Karma: {karma}
 - Location: {location}
 - Chapter: {chapter}
@@ -219,18 +224,36 @@ ITEM ACQUISITION:
 - Materials are for crafting
 - Treasures have special effects
 
+STAMINA SYSTEM (NEW):
+- Stamina represents physical energy, separate from Qi (spiritual energy)
+- Current Stamina: {stamina}/{max_stamina}
+- Stamina regenerates automatically based on realm and strength stat
+- Use stamina for PHYSICAL activities: running, fighting, climbing, swimming, digging, carrying heavy loads
+- Use Qi for SPIRITUAL/MYSTICAL activities: techniques, flying, healing, cultivation breakthroughs
+- Some advanced techniques may use BOTH stamina and qi
+- Stamina costs for common actions:
+  * Light activity (walking, talking): 0 stamina
+  * Moderate activity (running, climbing): -5 to -15 stamina
+  * Heavy activity (fighting, carrying): -15 to -30 stamina
+  * Extreme exertion (sprinting, intense combat): -30 to -50 stamina
+- When stamina is low (<20%), character becomes exhausted (apply debuff)
+- When stamina reaches 0, character collapses and cannot perform physical actions
+- Example: "stat_changes": {"stamina": -20} for a sprint across the courtyard
+
 EFFECTS SYSTEM (NEW):
 - Effects are temporary or permanent buffs/debuffs that modify character stats and regeneration
-- Use effects for: poisons, curses, blessings, injuries, qi deviation, pill effects, technique effects
+- Use effects for: poisons, curses, blessings, injuries, qi deviation, pill effects, technique effects, exhaustion
 - Effect types: buff, debuff, poison, curse, blessing, qi_deviation
-- Effects can modify: stats (strength, agility, etc.), regeneration rates, damage over time, max health/qi
+- Effects can modify: stats (strength, agility, etc.), regeneration rates, damage over time, max health/qi/stamina
 - Duration in seconds (-1 for permanent)
 - Examples:
   * Poison: damageOverTime: {healthDamage: 2} (2 HP/sec), duration: 60
   * Blessing: statModifiers: {strength: 5, agility: 5}, duration: 300
   * Qi Deviation: damageOverTime: {healthDamage: 5, qiDrain: 3}, statModifiers: {intelligence: -10}, duration: 120
-  * Regeneration Pill: regenModifiers: {healthRegen: 5, qiRegen: 3}, duration: 60
+  * Regeneration Pill: regenModifiers: {healthRegen: 5, qiRegen: 3, staminaRegen: 2}, duration: 60
   * Curse: statModifiers: {luck: -5}, isPermanent: true
+  * Exhaustion: damageOverTime: {staminaDrain: 2}, statModifiers: {strength: -2, agility: -3}, duration: 300
+  * Warrior's Vigor: regenModifiers: {staminaRegen: 3}, maxStatModifiers: {maxStamina: 50}, duration: 600
 - Use effects_to_add to apply new effects, effects_to_remove to remove them
 - Damage over time can kill the character if health reaches 0
 
@@ -246,7 +269,7 @@ RESPONSE FORMAT (STRICT JSON):
   "system_message": "Concise stat changes summary like 'Strength +2, Learned: Shadow Step, Cultivation +10'",
   
   "stat_changes": {
-    "health": 0, "qi": 0, "karma": 0,
+    "health": 0, "qi": 0, "stamina": 0, "karma": 0,
     "strength": 0, "agility": 0, "intelligence": 0, "charisma": 0, "luck": 0,
     "cultivation": 0
   },
@@ -292,9 +315,9 @@ RESPONSE FORMAT (STRICT JSON):
       "description": "What the effect does",
       "duration": 60,
       "statModifiers": {"strength": 0, "agility": 0, "intelligence": 0, "charisma": 0, "luck": 0, "cultivation": 0},
-      "regenModifiers": {"healthRegen": 0, "qiRegen": 0},
-      "damageOverTime": {"healthDamage": 0, "qiDrain": 0},
-      "maxStatModifiers": {"maxHealth": 0, "maxQi": 0},
+      "regenModifiers": {"healthRegen": 0, "qiRegen": 0, "staminaRegen": 0},
+      "damageOverTime": {"healthDamage": 0, "qiDrain": 0, "staminaDrain": 0},
+      "maxStatModifiers": {"maxHealth": 0, "maxQi": 0, "maxStamina": 0},
       "isPermanent": false,
       "stackable": false
     }
@@ -404,6 +427,8 @@ export class DeepseekService {
       .replace('{max_health}', character.maxHealth?.toString() || '100')
       .replace('{qi}', character.qi?.toString() || '0')
       .replace('{max_qi}', character.maxQi?.toString() || '100')
+      .replace('{stamina}', Math.round(character.stamina || 0).toString())
+      .replace('{max_stamina}', (character.maxStamina || 100).toString())
       .replace('{karma}', character.karma?.toString() || '0')
       .replace('{location}', 'Starting Village') // Will be dynamic later
       .replace('{chapter}', '1') // Will be dynamic later

@@ -15,6 +15,7 @@ type StatusPanelProps = {
 export function StatusPanel({ character, isOpen, onClose }: StatusPanelProps) {
   const healthPercentage = (character.health / character.maxHealth) * 100;
   const qiPercentage = (character.qi / character.maxQi) * 100;
+  const staminaPercentage = ((character.stamina || 0) / (character.maxStamina || 100)) * 100;
   const cultivationProgress = character.cultivationProgress || 0;
   
   // Calculate regeneration rates
@@ -82,7 +83,7 @@ export function StatusPanel({ character, isOpen, onClose }: StatusPanelProps) {
                 <span className="flex items-center gap-2 text-white/70">
                   <Zap className="w-4 h-4 text-purple-400" /> Qi
                 </span>
-                <span className="text-white">{character.qi}/{character.maxQi}</span>
+                <span className="text-white">{Math.round(character.qi)}/{character.maxQi}</span>
               </div>
               <div className="h-3 bg-black/50 rounded-full overflow-hidden">
                 <div
@@ -90,6 +91,25 @@ export function StatusPanel({ character, isOpen, onClose }: StatusPanelProps) {
                   style={{ width: `${qiPercentage}%` }}
                 />
               </div>
+            </div>
+
+            {/* Stamina */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="flex items-center gap-2 text-white/70">
+                  <TrendingUp className="w-4 h-4 text-amber-400" /> Stamina
+                </span>
+                <span className="text-white">{Math.round(character.stamina || 0)}/{character.maxStamina || 100}</span>
+              </div>
+              <div className="h-3 bg-black/50 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-amber-500 to-yellow-400 transition-all duration-500 rounded-full"
+                  style={{ width: `${staminaPercentage}%` }}
+                />
+              </div>
+              <p className="text-[10px] text-white/40 text-right">
+                +{regen.stamina.toFixed(1)}/s (Strength bonus)
+              </p>
             </div>
 
             {/* Cultivation Progress */}

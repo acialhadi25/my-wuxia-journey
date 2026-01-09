@@ -439,6 +439,8 @@ Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone
       max_health: updatedCharacter.maxHealth,
       qi: Math.round(updatedCharacter.qi),
       max_qi: updatedCharacter.maxQi,
+      stamina: Math.round(updatedCharacter.stamina || 100),
+      max_stamina: updatedCharacter.maxStamina || 100,
       karma: updatedCharacter.karma,
       realm: updatedCharacter.realm,
       cultivation_progress: updatedCharacter.cultivationProgress,

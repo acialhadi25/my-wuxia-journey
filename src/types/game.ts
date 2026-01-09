@@ -80,6 +80,8 @@ export type Character = {
   maxQi: number;
   health: number;
   maxHealth: number;
+  stamina: number; // New: Physical energy
+  maxStamina: number; // New: Max stamina based on strength
   karma: number;
   cultivationProgress: number;
   breakthroughReady: boolean;
@@ -114,14 +116,17 @@ export type ActiveEffect = {
   regenModifiers?: {
     healthRegen?: number; // per second
     qiRegen?: number; // per second
+    staminaRegen?: number; // per second - NEW
   };
   damageOverTime?: {
     healthDamage?: number; // per second
     qiDrain?: number; // per second
+    staminaDrain?: number; // per second - NEW
   };
   maxStatModifiers?: {
     maxHealth?: number;
     maxQi?: number;
+    maxStamina?: number; // NEW
   };
   isPermanent?: boolean;
   stackable?: boolean;
@@ -301,4 +306,15 @@ export function getRankColor(rank: TechniqueRank): string {
     case 'divine': return 'text-crimson';
     default: return 'text-foreground';
   }
+}
+
+/**
+ * Calculate max stamina based on strength stat
+ * Base: 100
+ * Each point of strength adds 5 stamina
+ */
+export function calculateMaxStamina(strength: number): number {
+  const BASE_STAMINA = 100;
+  const STAMINA_PER_STRENGTH = 5;
+  return BASE_STAMINA + (strength * STAMINA_PER_STRENGTH);
 }

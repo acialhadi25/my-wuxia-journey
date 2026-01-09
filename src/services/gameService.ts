@@ -107,6 +107,8 @@ export async function saveCharacterToDatabase(character: Character, userId: stri
       max_qi: character.maxQi,
       health: character.health,
       max_health: character.maxHealth,
+      stamina: character.stamina || 100,
+      max_stamina: character.maxStamina || 100,
       karma: character.karma,
       cultivation_progress: character.cultivationProgress,
       breakthrough_ready: character.breakthroughReady,
@@ -141,6 +143,8 @@ export async function updateCharacterInDatabase(
     max_qi: number;
     health: number;
     max_health: number;
+    stamina: number;
+    max_stamina: number;
     karma: number;
     cultivation_progress: number;
     breakthrough_ready: boolean;
@@ -482,10 +486,22 @@ export function applyStatChanges(
     newMaxHealth = REALM_MAX_HEALTH[newRealm];
   }
 
+  // Calculate new strength (needed for stamina calculation)
+  const newStrength = Math.max(1, character.stats.strength + (changes.strength || 0));
+  
+  // Calculate max stamina based on new strength
+  const newMaxStamina = 100 + (newStrength * 5);
+  
+  // Apply stamina change, clamped between 0 and max
+  const currentStamina = character.stamina || newMaxStamina;
+  const newStamina = Math.max(0, Math.min(newMaxStamina, currentStamina + (changes.stamina || 0)));
+
   return {
     ...character,
     health: Math.max(0, Math.min(newMaxHealth, character.health + (changes.health || 0))),
     qi: Math.max(0, Math.min(newMaxQi, character.qi + (changes.qi || 0))),
+    stamina: newStamina,
+    maxStamina: newMaxStamina,
     maxQi: newMaxQi,
     maxHealth: newMaxHealth,
     karma: character.karma + (changes.karma || 0),
@@ -494,7 +510,7 @@ export function applyStatChanges(
     realm: newRealm,
     stats: {
       ...character.stats,
-      strength: Math.max(1, character.stats.strength + (changes.strength || 0)),
+      strength: newStrength,
       agility: Math.max(1, character.stats.agility + (changes.agility || 0)),
       intelligence: Math.max(1, character.stats.intelligence + (changes.intelligence || 0)),
       charisma: Math.max(1, character.stats.charisma + (changes.charisma || 0)),

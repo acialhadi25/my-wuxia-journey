@@ -1,26 +1,34 @@
 import { Character, CultivationRealm, ActiveEffect } from '@/types/game';
+import { calculateMaxStamina } from '@/types/game';
 
 // Regeneration rates based on cultivation realm (per second)
-const REALM_REGEN_RATES: Record<CultivationRealm, { health: number; qi: number }> = {
-  'Mortal': { health: 0.1, qi: 0.2 },
-  'Qi Condensation': { health: 0.2, qi: 0.5 },
-  'Foundation Establishment': { health: 0.3, qi: 1.0 },
-  'Core Formation': { health: 0.5, qi: 2.0 },
-  'Nascent Soul': { health: 1.0, qi: 4.0 },
-  'Spirit Severing': { health: 2.0, qi: 8.0 },
-  'Dao Seeking': { health: 4.0, qi: 15.0 },
-  'Immortal Ascension': { health: 10.0, qi: 30.0 },
+const REALM_REGEN_RATES: Record<CultivationRealm, { health: number; qi: number; stamina: number }> = {
+  'Mortal': { health: 0.1, qi: 0.2, stamina: 1.0 },
+  'Qi Condensation': { health: 0.2, qi: 0.5, stamina: 1.5 },
+  'Foundation Establishment': { health: 0.3, qi: 1.0, stamina: 2.0 },
+  'Core Formation': { health: 0.5, qi: 2.0, stamina: 2.5 },
+  'Nascent Soul': { health: 1.0, qi: 4.0, stamina: 3.0 },
+  'Spirit Severing': { health: 2.0, qi: 8.0, stamina: 4.0 },
+  'Dao Seeking': { health: 4.0, qi: 15.0, stamina: 5.0 },
+  'Immortal Ascension': { health: 10.0, qi: 30.0, stamina: 10.0 },
 };
+
+// Stamina regeneration bonus from strength (per point)
+const STAMINA_REGEN_PER_STRENGTH = 0.1; // Each strength point adds 0.1 stamina/sec
 
 export class RegenerationService {
   /**
-   * Calculate total regeneration including base + effects
+   * Calculate total regeneration including base + effects + strength bonus for stamina
    */
-  static calculateRegeneration(character: Character): { health: number; qi: number } {
+  static calculateRegeneration(character: Character): { health: number; qi: number; stamina: number } {
     const baseRegen = REALM_REGEN_RATES[character.realm] || REALM_REGEN_RATES['Mortal'];
     
     let healthRegen = baseRegen.health;
     let qiRegen = baseRegen.qi;
+    let staminaRegen = baseRegen.stamina;
+    
+    // Add strength bonus to stamina regeneration
+    staminaRegen += character.stats.strength * STAMINA_REGEN_PER_STRENGTH;
 
     // Apply effect modifiers
     if (character.activeEffects) {
@@ -28,19 +36,22 @@ export class RegenerationService {
         if (effect.regenModifiers) {
           healthRegen += effect.regenModifiers.healthRegen || 0;
           qiRegen += effect.regenModifiers.qiRegen || 0;
+          staminaRegen += effect.regenModifiers.staminaRegen || 0;
         }
         
         // Apply damage over time (negative regen)
         if (effect.damageOverTime) {
           healthRegen -= effect.damageOverTime.healthDamage || 0;
           qiRegen -= effect.damageOverTime.qiDrain || 0;
+          staminaRegen -= effect.damageOverTime.staminaDrain || 0;
         }
       }
     }
 
     return {
-      health: Math.max(0, healthRegen), // Can't be negative (handled separately)
+      health: Math.max(0, healthRegen),
       qi: Math.max(0, qiRegen),
+      stamina: Math.max(0, staminaRegen),
     };
   }
 
@@ -53,19 +64,25 @@ export class RegenerationService {
     // Calculate regeneration amount based on time passed
     const healthGain = regen.health * deltaTime;
     const qiGain = regen.qi * deltaTime;
+    const staminaGain = regen.stamina * deltaTime;
 
     // Apply damage over time separately (can kill)
     let healthLoss = 0;
     let qiLoss = 0;
+    let staminaLoss = 0;
     
     if (character.activeEffects) {
       for (const effect of character.activeEffects) {
         if (effect.damageOverTime) {
           healthLoss += (effect.damageOverTime.healthDamage || 0) * deltaTime;
           qiLoss += (effect.damageOverTime.qiDrain || 0) * deltaTime;
+          staminaLoss += (effect.damageOverTime.staminaDrain || 0) * deltaTime;
         }
       }
     }
+
+    // Update max stamina based on current strength
+    const newMaxStamina = calculateMaxStamina(character.stats.strength);
 
     const newHealth = Math.min(
       character.maxHealth,
@@ -76,11 +93,18 @@ export class RegenerationService {
       character.maxQi,
       Math.max(0, character.qi + qiGain - qiLoss)
     );
+    
+    const newStamina = Math.min(
+      newMaxStamina,
+      Math.max(0, (character.stamina || newMaxStamina) + staminaGain - staminaLoss)
+    );
 
     return {
       ...character,
-      health: Math.round(newHealth * 10) / 10, // Round to 1 decimal
+      health: Math.round(newHealth * 10) / 10,
       qi: Math.round(newQi * 10) / 10,
+      stamina: Math.round(newStamina * 10) / 10,
+      maxStamina: newMaxStamina,
       lastRegeneration: Date.now(),
     };
   }
@@ -156,10 +180,12 @@ export class RegenerationService {
   static calculateMaxStatModifiers(character: Character): {
     maxHealth: number;
     maxQi: number;
+    maxStamina: number;
   } {
     const modifiers = {
       maxHealth: 0,
       maxQi: 0,
+      maxStamina: 0,
     };
 
     if (!character.activeEffects) {
@@ -170,6 +196,7 @@ export class RegenerationService {
       if (effect.maxStatModifiers) {
         modifiers.maxHealth += effect.maxStatModifiers.maxHealth || 0;
         modifiers.maxQi += effect.maxStatModifiers.maxQi || 0;
+        modifiers.maxStamina += effect.maxStatModifiers.maxStamina || 0;
       }
     }
 
