@@ -11,11 +11,17 @@ type InventoryPanelProps = {
   isOpen: boolean;
   onClose: () => void;
   onUseItem?: (item: InventoryItem) => void;
+  onPanelClose?: () => void; // Called when panel closes (for tutorial)
 };
 
-export function InventoryPanel({ character, isOpen, onClose, onUseItem }: InventoryPanelProps) {
+export function InventoryPanel({ character, isOpen, onClose, onUseItem, onPanelClose }: InventoryPanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
+
+  const handleClose = () => {
+    onClose();
+    onPanelClose?.(); // Trigger tutorial callback if exists
+  };
 
   const filteredInventory = character.inventory?.filter(item =>
     item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -66,7 +72,7 @@ export function InventoryPanel({ character, isOpen, onClose, onUseItem }: Invent
           <h2 className="font-display text-xl text-gold">Inventory</h2>
           <span className="text-sm text-white/60">({character.inventory?.length || 0})</span>
         </div>
-        <Button variant="ghost" size="icon" onClick={onClose} className="text-white/70 hover:text-white hover:bg-white/10">
+        <Button variant="ghost" size="icon" onClick={handleClose} className="text-white/70 hover:text-white hover:bg-white/10">
           <X className="w-5 h-5" />
         </Button>
       </div>

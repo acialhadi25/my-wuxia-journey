@@ -10,11 +10,17 @@ type TechniquesPanelProps = {
   character: Character;
   isOpen: boolean;
   onClose: () => void;
+  onPanelClose?: () => void; // Called when panel closes (for tutorial)
 };
 
-export function TechniquesPanel({ character, isOpen, onClose }: TechniquesPanelProps) {
+export function TechniquesPanel({ character, isOpen, onClose, onPanelClose }: TechniquesPanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'martial' | 'mystic' | 'passive'>('all');
+
+  const handleClose = () => {
+    onClose();
+    onPanelClose?.(); // Trigger tutorial callback if exists
+  };
 
   const filteredTechniques = character.techniques?.filter(tech => {
     const matchesSearch = tech.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -70,7 +76,7 @@ export function TechniquesPanel({ character, isOpen, onClose }: TechniquesPanelP
           <h2 className="font-display text-xl text-gold">Techniques</h2>
           <span className="text-sm text-white/60">({character.techniques?.length || 0})</span>
         </div>
-        <Button variant="ghost" size="icon" onClick={onClose} className="text-white/70 hover:text-white hover:bg-white/10">
+        <Button variant="ghost" size="icon" onClick={handleClose} className="text-white/70 hover:text-white hover:bg-white/10">
           <X className="w-5 h-5" />
         </Button>
       </div>

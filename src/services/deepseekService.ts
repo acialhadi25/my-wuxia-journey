@@ -889,6 +889,7 @@ CRITICAL CONSTRAINTS:
 - Do NOT add explanatory text outside the JSON
 - Keep narrative focused but richly detailed
 - ALWAYS validate JSON before responding - no syntax errors allowed
+- **IMPORTANT: Provide EXACTLY 2 suggested_actions** - no more, no less (keeps UI clean and focused)
 
 GOLDEN FINGER EFFECTS (apply appropriately):
 - The System: Occasionally give quest rewards (bonus stats, items)

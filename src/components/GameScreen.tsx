@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import * as React from 'react';
 import { Character, GameMessage, GameChoice, Technique, InventoryItem, CultivationRealm, REALM_MAX_QI, REALM_MAX_HEALTH } from '@/types/game';
 import { StoryMessage } from './StoryMessage';
 import { ActionInput } from './ActionInput';
@@ -8,6 +9,8 @@ import { InventoryPanel } from './InventoryPanel';
 import { TechniquesPanel } from './TechniquesPanel';
 import { GoldenFingerPanel } from './GoldenFingerPanel';
 import { MemoryPanel } from './MemoryPanel';
+import { DaoMasterMessage } from './DaoMasterMessage';
+import { createTutorialHandlers } from './GameScreen.tutorial';
 import { Button } from '@/components/ui/button';
 import { MobileButton } from './MobileButton';
 import { SEO } from './SEO';
@@ -23,6 +26,7 @@ import { trackGameEvent, trackGameTiming } from '@/lib/analytics';
 import { perf } from '@/lib/performance';
 import { useRegeneration } from '@/hooks/useRegeneration';
 import { RegenerationService } from '@/services/regenerationService';
+import { TutorialService } from '@/services/tutorialService';
 import {
   generateNarrative,
   saveCharacterToDatabase,
@@ -73,9 +77,17 @@ export function GameScreen({ character, onUpdateCharacter, userId, savedCharacte
   const [timeElapsed, setTimeElapsed] = useState('Day 1');
   const [currentChapter, setCurrentChapter] = useState(1);
   const [characterId, setCharacterId] = useState<string | null>(initialSavedId || null);
-  const [awakeningActionCount, setAwakeningActionCount] = useState(0); // Track awakening progress
+  const [awakeningActionCount, setAwakeningActionCount] = useState(0);
+  
+  // Tutorial states
+  const [tutorialActive, setTutorialActive] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
+  const [tutorialHighlight, setTutorialHighlight] = useState<string | undefined>();
+  const [showDaoMaster, setShowDaoMaster] = useState(false);
+  const [daoMasterMessage, setDaoMasterMessage] = useState('');
+  
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { language } = useLanguage(); // Get current language
+  const { language } = useLanguage();
   const hasInitialized = useRef(false);
 
   // Enable regeneration system
@@ -130,6 +142,53 @@ export function GameScreen({ character, onUpdateCharacter, userId, savedCharacte
         
         // Load existing messages if continuing
         if (initialSavedId) {
+          // First, check tutorial status from character prop (already loaded)
+          console.log('📊 Character tutorial status:', {
+            completed: character.tutorialCompleted,
+            step: character.tutorialStep
+          });
+          
+          // Check if tutorial is still in progress
+          if (!character.tutorialCompleted && (character.tutorialStep || 0) < 15) {
+            const currentStep = character.tutorialStep || 0;
+            
+            console.log(`🎓 Tutorial in progress (step ${currentStep}) after reload...`);
+            
+            // Load existing messages
+            const { data: existingMessages } = await supabase
+              .from('chat_messages')
+              .select('*')
+              .eq('character_id', charId)
+              .order('created_at', { ascending: true });
+            
+            if (existingMessages && existingMessages.length > 0) {
+              const loadedMessages: GameMessage[] = existingMessages.map(msg => ({
+                id: msg.id,
+                type: msg.message_type as any,
+                content: msg.content,
+                timestamp: new Date(msg.created_at),
+                speaker: msg.speaker || undefined
+              }));
+              setMessages(loadedMessages);
+              console.log('Loaded', loadedMessages.length, 'messages from database');
+            }
+            
+            // Start or resume tutorial based on step
+            if (tutorialHandlers) {
+              if (currentStep === 0) {
+                console.log('🎓 Starting tutorial from beginning...');
+                await tutorialHandlers.startTutorial();
+              } else {
+                console.log(`🎓 Resuming tutorial at step ${currentStep}...`);
+                await tutorialHandlers.resumeTutorial(currentStep);
+              }
+            }
+            
+            setIsLoading(false);
+            return;
+          }
+          
+          // Tutorial completed or not started - load normal game state
           const { data: existingMessages } = await supabase
             .from('chat_messages')
             .select('*')
@@ -158,8 +217,7 @@ export function GameScreen({ character, onUpdateCharacter, userId, savedCharacte
               console.log('No saved choices found, using default choices');
               setChoices([
                 { id: '1', text: 'Continue exploring', type: 'action' },
-                { id: '2', text: 'Rest and meditate', type: 'action' },
-                { id: '3', text: 'Look for opportunities', type: 'action' }
+                { id: '2', text: 'Rest and meditate', type: 'action' }
               ]);
             }
             
@@ -168,7 +226,35 @@ export function GameScreen({ character, onUpdateCharacter, userId, savedCharacte
           }
         }
         
-        // Generate awakening scenario as opening narrative
+        // Check if tutorial should start or resume
+        if (!character.tutorialCompleted) {
+          const currentStep = character.tutorialStep || 0;
+          
+          if (currentStep === 0) {
+            // Start new tutorial
+            console.log('🎓 Starting tutorial for new character...');
+            if (tutorialHandlers) {
+              await tutorialHandlers.startTutorial();
+            }
+          } else if (currentStep < 15) {
+            // Resume tutorial
+            console.log(`🎓 Resuming tutorial at step ${currentStep}...`);
+            if (tutorialHandlers) {
+              await tutorialHandlers.resumeTutorial(currentStep);
+            }
+          } else {
+            // Tutorial marked incomplete but at step 15 - complete it
+            console.log('🎓 Completing unfinished tutorial...');
+            if (tutorialHandlers) {
+              await tutorialHandlers.completeTutorial();
+            }
+          }
+          
+          setIsLoading(false);
+          return;
+        }
+        
+        // Tutorial already completed - generate AI awakening scenario
         console.log('Generating awakening scenario...');
         const response = await generateNarrative(
           character,
@@ -286,9 +372,8 @@ Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone
 
     setMessages(prev => [...prev, ...openingMessages]);
     setChoices([
-      { id: '1', text: 'Accept the humiliation silently (Mental +5)', type: 'action', checkType: 'intelligence' },
-      { id: '2', text: 'Challenge the messenger to a duel', type: 'combat', checkType: 'strength' },
-      { id: '3', text: 'Smile mysteriously and walk away', type: 'action', checkType: 'charisma' },
+      { id: '1', text: 'Accept the humiliation silently', type: 'action', checkType: 'intelligence' },
+      { id: '2', text: 'Challenge the messenger to a duel', type: 'combat', checkType: 'strength' }
     ]);
   };
 
@@ -588,6 +673,34 @@ Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone
     }
   };
 
+  // Initialize tutorial handlers (after processAIResponse is defined)
+  const tutorialHandlers = React.useMemo(() => {
+    if (!characterId) return null;
+    
+    return createTutorialHandlers(
+      character,
+      characterId,
+      language,
+      {
+        setTutorialActive,
+        setTutorialStep,
+        setShowDaoMaster,
+        setDaoMasterMessage,
+        setMessages,
+        setChoices,
+        setTutorialHighlight,
+        setIsStatusOpen,
+        setIsInventoryOpen,
+        setIsTechniquesOpen,
+        setIsCultivationOpen,
+        setIsGoldenFingerOpen,
+        setIsMemoryOpen,
+        onUpdateCharacter
+      },
+      processAIResponse
+    );
+  }, [characterId, character, language, processAIResponse]);
+
   const handleUseItem = async (item: InventoryItem) => {
     if (!characterId) return;
 
@@ -645,7 +758,7 @@ Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone
       }
       
       // AUTO-REMOVE HUNGER EFFECTS when consuming food items
-      if (item.type === 'consumable' && (item.effects?.health || item.effects?.stamina)) {
+      if ((item.type === 'pill' || item.type === 'misc') && (item.effects?.health || item.effects?.stamina)) {
         const hungerEffects = ['Kelaparan', 'Kelaparan Parah', 'Kelaparan Akut', 'Starving', 'Hunger'];
         hungerEffects.forEach(effectName => {
           updatedCharacter = RegenerationService.removeEffect(updatedCharacter, effectName);
@@ -700,6 +813,19 @@ Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone
 
   const handleAction = useCallback(async (action: string) => {
     if (isLoading || !characterId) return;
+    
+    // If tutorial is active, use tutorial flow
+    if (tutorialActive && tutorialHandlers) {
+      setIsLoading(true);
+      try {
+        await tutorialHandlers.handleTutorialAction();
+      } catch (error) {
+        console.error('Tutorial action failed:', error);
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
     
     // Validate action input
     const validation = validateAction(action);
@@ -895,7 +1021,8 @@ Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone
         title="Game"
         description={`${character.name}'s cultivation journey - ${character.realm} realm cultivator`}
       />
-      <div className="min-h-screen flex flex-col relative">
+      
+      <div className="min-h-screen flex flex-col relative h-screen overflow-hidden">
         {/* Background Image */}
         <div 
           className="fixed inset-0 bg-cover bg-center bg-no-repeat"
@@ -910,108 +1037,69 @@ Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone
         {/* Header */}
         <header className="sticky top-0 z-40 bg-black/60 backdrop-blur-md border-b border-white/10">
           <div className="flex items-center justify-between p-2 sm:p-3 md:p-4 max-w-4xl mx-auto">
-            <div className="flex items-center gap-1">
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={() => setIsStatusOpen(true)}
-                className="h-9 w-9 sm:h-10 sm:w-10 md:h-11 md:w-11 text-white/70 hover:text-gold hover:bg-white/10 touch-manipulation"
-              >
-                <User className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={() => setIsCultivationOpen(true)}
-                className={cn(
-                  "h-9 w-9 sm:h-10 sm:w-10 md:h-11 md:w-11 hover:bg-white/10 touch-manipulation",
-                  character.breakthroughReady ? 'text-gold animate-pulse' : 'text-white/70 hover:text-gold'
-                )}
-              >
-                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={() => setIsTechniquesOpen(true)}
-                className="h-9 w-9 sm:h-10 sm:w-10 md:h-11 md:w-11 text-white/70 hover:text-purple-400 hover:bg-white/10 touch-manipulation relative"
-              >
-                <Swords className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
-                {character.techniques && character.techniques.length > 0 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 bg-purple-500 text-white text-[10px] sm:text-xs rounded-full flex items-center justify-center font-bold">
-                    {character.techniques.length}
-                  </span>
-                )}
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={() => setIsInventoryOpen(true)}
-                className="h-9 w-9 sm:h-10 sm:w-10 md:h-11 md:w-11 text-white/70 hover:text-blue-400 hover:bg-white/10 touch-manipulation relative"
-              >
-                <Package className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
-                {character.inventory && character.inventory.length > 0 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 bg-blue-500 text-white text-[10px] sm:text-xs rounded-full flex items-center justify-center font-bold">
-                    {character.inventory.length}
-                  </span>
-                )}
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={() => setIsGoldenFingerOpen(true)}
-                className={cn(
-                  "h-9 w-9 sm:h-10 sm:w-10 md:h-11 md:w-11 hover:bg-white/10 touch-manipulation",
-                  character.goldenFingerUnlocked ? 'text-gold hover:text-gold animate-pulse' : 'text-white/40 hover:text-white/60'
-                )}
-              >
-                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 fill-current" />
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={() => setIsMemoryOpen(true)}
-                className="h-9 w-9 sm:h-10 sm:w-10 md:h-11 md:w-11 text-white/70 hover:text-purple-400 hover:bg-white/10 touch-manipulation"
-              >
-                <Brain className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
-              </Button>
-            </div>
-          
-          <div className="text-center flex-1 px-1 sm:px-2 min-w-0">
-            <div className="flex items-center gap-1 sm:gap-2 justify-center flex-wrap">
-              <p className="text-xs sm:text-sm text-white/60 flex items-center gap-1">
-                <MapPin className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" /> 
-                <span className="truncate max-w-[100px] sm:max-w-[150px] md:max-w-none">{currentLocation}</span>
-              </p>
-              {isSaving && (
-                <div className="flex items-center gap-1 text-xs text-white/50">
-                  <Save className="w-3 h-3 animate-pulse" />
-                  <span className="hidden md:inline">Saving...</span>
-                </div>
+            {/* Memory Button - Left Side */}
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => setIsMemoryOpen(true)}
+              className={cn(
+                "h-9 w-9 sm:h-10 sm:w-10 md:h-11 md:w-11 text-white/70 hover:text-purple-400 hover:bg-white/10 touch-manipulation",
+                tutorialHighlight === 'memory' && 'animate-pulse ring-4 ring-yellow-400 ring-offset-2 ring-offset-black'
               )}
-            </div>
-            <p className="text-xs sm:text-sm text-gold flex items-center gap-1 justify-center mt-0.5">
-              <Clock className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" /> 
-              <span className="truncate">{timeElapsed}</span>
-            </p>
-          </div>
+            >
+              <Brain className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
+            </Button>
           
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={onSignOut}
-            className="h-9 w-9 sm:h-10 sm:w-10 md:h-11 md:w-11 text-white/70 hover:text-red-400 hover:bg-white/10 touch-manipulation"
-          >
-            <LogOut className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
-          </Button>
-        </div>
-      </header>
+            {/* Center - Location & Time Info */}
+            <div className="text-center flex-1 px-1 sm:px-2 min-w-0">
+              <div className="flex items-center gap-1 sm:gap-2 justify-center flex-wrap">
+                <p className="text-xs sm:text-sm text-white/60 flex items-center gap-1">
+                  <MapPin className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" /> 
+                  <span className="truncate max-w-[100px] sm:max-w-[150px] md:max-w-none">{currentLocation}</span>
+                </p>
+                {isSaving && (
+                  <div className="flex items-center gap-1 text-xs text-white/50">
+                    <Save className="w-3 h-3 animate-pulse" />
+                    <span className="hidden md:inline">Saving...</span>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs sm:text-sm text-gold flex items-center gap-1 justify-center mt-0.5">
+                <Clock className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" /> 
+                <span className="truncate">{timeElapsed}</span>
+              </p>
+            </div>
+          
+            {/* Logout Button - Right Side */}
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={onSignOut}
+              className="h-9 w-9 sm:h-10 sm:w-10 md:h-11 md:w-11 text-white/70 hover:text-red-400 hover:bg-white/10 touch-manipulation"
+            >
+              <LogOut className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
+            </Button>
+          </div>
+        </header>
 
-      {/* Story Stream */}
+      {/* Story Stream - Scrollable with padding for fixed elements */}
       <div 
         ref={scrollRef}
         className="relative z-10 flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 space-y-3 sm:space-y-4 md:space-y-6 scrollbar-hide max-w-4xl mx-auto w-full"
+        style={{ 
+          paddingBottom: '280px', // Space for action input + bottom nav (increased)
+          height: 'calc(100vh - 64px)' // Full height minus header
+        }}
       >
+        {/* Dao Master Message - Show above other messages during tutorial */}
+        {showDaoMaster && daoMasterMessage && (
+          <DaoMasterMessage 
+            message={daoMasterMessage}
+            stepNumber={tutorialStep}
+            totalSteps={15}
+          />
+        )}
+        
         {messages.map((message, index) => (
           <StoryMessage 
             key={message.id} 
@@ -1023,13 +1111,11 @@ Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone
         {isLoading && <NarrativeSkeleton />}
       </div>
 
-      {/* Bottom fade overlay */}
-      <div className="sticky bottom-0 pointer-events-none z-10">
-        <div className="h-8 sm:h-12 bg-gradient-to-t from-black/90 to-transparent" />
-      </div>
+      {/* Gradient Overlay - Fades story messages before action area */}
+      <div className="fixed bottom-[72px] left-0 right-0 h-12 z-15 bg-gradient-to-t from-black via-black/80 to-transparent pointer-events-none" />
 
-      {/* Action Input */}
-      <div className="sticky bottom-0 z-20 bg-black/80 backdrop-blur-md border-t border-white/10 p-3 sm:p-4 md:p-6 safe-area-bottom">
+      {/* Action Input - Extended background to cover gap completely */}
+      <div className="fixed bottom-0 left-0 right-0 z-20 bg-black backdrop-blur-md px-3 pt-2 pb-[72px]">
         <div className="max-w-4xl mx-auto">
           <ActionInput
             choices={choices}
@@ -1037,6 +1123,101 @@ Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone
             isLoading={isLoading}
             allowCustomAction={character.goldenFingerUnlocked ?? false}
           />
+        </div>
+        {/* Border separator */}
+        <div className="absolute top-0 left-0 right-0 h-px bg-white/10" />
+      </div>
+
+      {/* Bottom Navigation Menu - On top of action background */}
+      <div className="fixed bottom-0 left-0 right-0 z-30 bg-black backdrop-blur-md safe-area-bottom">
+        <div className="max-w-4xl mx-auto">
+          <div className="grid grid-cols-5 gap-0">
+            {/* Status Button */}
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => setIsStatusOpen(true)}
+              className={cn(
+                "flex flex-col items-center gap-1 h-auto py-3 px-2 text-white/70 hover:text-gold hover:bg-white/10 touch-manipulation rounded-none border-r border-white/5",
+                tutorialHighlight === 'status' && 'animate-pulse ring-2 ring-inset ring-yellow-400 bg-yellow-400/10'
+              )}
+            >
+              <User className="w-5 h-5" />
+              <span className="text-[10px] font-medium">Status</span>
+            </Button>
+
+            {/* Cultivation Button */}
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => setIsCultivationOpen(true)}
+              className={cn(
+                "flex flex-col items-center gap-1 h-auto py-3 px-2 hover:bg-white/10 touch-manipulation rounded-none border-r border-white/5",
+                character.breakthroughReady ? 'text-gold animate-pulse' : 'text-white/70 hover:text-gold',
+                tutorialHighlight === 'cultivation' && 'ring-2 ring-inset ring-yellow-400 bg-yellow-400/10'
+              )}
+            >
+              <Sparkles className="w-5 h-5" />
+              <span className="text-[10px] font-medium">Cultivation</span>
+            </Button>
+
+            {/* Techniques Button */}
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => setIsTechniquesOpen(true)}
+              className={cn(
+                "flex flex-col items-center gap-1 h-auto py-3 px-2 text-white/70 hover:text-purple-400 hover:bg-white/10 touch-manipulation relative rounded-none border-r border-white/5",
+                tutorialHighlight === 'techniques' && 'animate-pulse ring-2 ring-inset ring-yellow-400 bg-yellow-400/10'
+              )}
+            >
+              <div className="relative">
+                <Swords className="w-5 h-5" />
+                {character.techniques && character.techniques.length > 0 && (
+                  <span className="absolute -top-2 -right-2 w-4 h-4 bg-purple-500 text-white text-[9px] rounded-full flex items-center justify-center font-bold">
+                    {character.techniques.length}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] font-medium">Techniques</span>
+            </Button>
+
+            {/* Inventory Button */}
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => setIsInventoryOpen(true)}
+              className={cn(
+                "flex flex-col items-center gap-1 h-auto py-3 px-2 text-white/70 hover:text-blue-400 hover:bg-white/10 touch-manipulation relative rounded-none border-r border-white/5",
+                tutorialHighlight === 'inventory' && 'animate-pulse ring-2 ring-inset ring-yellow-400 bg-yellow-400/10'
+              )}
+            >
+              <div className="relative">
+                <Package className="w-5 h-5" />
+                {character.inventory && character.inventory.length > 0 && (
+                  <span className="absolute -top-2 -right-2 w-4 h-4 bg-blue-500 text-white text-[9px] rounded-full flex items-center justify-center font-bold">
+                    {character.inventory.length}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] font-medium">Inventory</span>
+            </Button>
+
+            {/* Golden Finger Button */}
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => setIsGoldenFingerOpen(true)}
+              className={cn(
+                "flex flex-col items-center gap-1 h-auto py-3 px-2 hover:bg-white/10 touch-manipulation rounded-none",
+                character.goldenFingerUnlocked ? 'text-gold hover:text-gold' : 'text-white/40 hover:text-white/60',
+                tutorialHighlight === 'goldenFinger' && 'ring-2 ring-inset ring-yellow-400 bg-yellow-400/10'
+              )}
+            >
+              <Sparkles className="w-5 h-5 fill-current" />
+              <span className="text-[10px] font-medium">Power</span>
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -1053,6 +1234,7 @@ Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone
         character={character}
         isOpen={isStatusOpen}
         onClose={() => setIsStatusOpen(false)}
+        onPanelClose={() => tutorialHandlers?.handleButtonInteraction()}
       />
 
       {/* Cultivation Panel Overlay */}
@@ -1070,6 +1252,7 @@ Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone
         onClose={() => setIsCultivationOpen(false)}
         onMeditationComplete={handleMeditationComplete}
         onBreakthroughAttempt={handleBreakthroughAttempt}
+        onPanelClose={() => tutorialHandlers?.handleButtonInteraction()}
       />
 
       {/* Inventory Panel Overlay */}
@@ -1086,6 +1269,7 @@ Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone
         isOpen={isInventoryOpen}
         onClose={() => setIsInventoryOpen(false)}
         onUseItem={handleUseItem}
+        onPanelClose={() => tutorialHandlers?.handleButtonInteraction()}
       />
 
       {/* Techniques Panel Overlay */}
@@ -1101,6 +1285,7 @@ Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone
         character={character}
         isOpen={isTechniquesOpen}
         onClose={() => setIsTechniquesOpen(false)}
+        onPanelClose={() => tutorialHandlers?.handleButtonInteraction()}
       />
 
       {/* Golden Finger Panel */}
@@ -1112,6 +1297,7 @@ Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone
           setIsGoldenFingerOpen(false);
           handleAction(`Use Golden Finger ability: ${abilityId}`);
         }}
+        onPanelClose={() => tutorialHandlers?.handleButtonInteraction()}
       />
 
       {/* Memory Panel Overlay */}
@@ -1128,6 +1314,7 @@ Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone
         isOpen={isMemoryOpen}
         onClose={() => setIsMemoryOpen(false)}
         currentChapter={currentChapter}
+        onPanelClose={() => tutorialHandlers?.handleButtonInteraction()}
       />
       </div>
     </>

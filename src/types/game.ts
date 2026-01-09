@@ -90,6 +90,7 @@ export type Character = {
   relationships: Relationship[];
   visualTraits: VisualTraits;
   tutorialCompleted?: boolean;
+  tutorialStep?: number; // 0-15, current tutorial step
   goldenFingerUnlocked?: boolean;
   activeEffects?: ActiveEffect[]; // New: Active buffs/debuffs
   lastRegeneration?: number; // New: Timestamp for regeneration

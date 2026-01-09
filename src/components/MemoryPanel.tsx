@@ -19,9 +19,10 @@ type MemoryPanelProps = {
   isOpen: boolean;
   onClose: () => void;
   currentChapter: number;
+  onPanelClose?: () => void; // Called when panel closes (for tutorial)
 };
 
-export function MemoryPanel({ character, isOpen, onClose, currentChapter }: MemoryPanelProps) {
+export function MemoryPanel({ character, isOpen, onClose, currentChapter, onPanelClose }: MemoryPanelProps) {
   const [memories, setMemories] = useState<MemoryEvent[]>([]);
   const [filteredMemories, setFilteredMemories] = useState<MemoryEvent[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -30,6 +31,11 @@ export function MemoryPanel({ character, isOpen, onClose, currentChapter }: Memo
   const [selectedMemory, setSelectedMemory] = useState<MemoryEvent | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
+
+  const handleClose = () => {
+    onClose();
+    onPanelClose?.(); // Trigger tutorial callback if exists
+  };
 
   // Load memories on mount
   useEffect(() => {
@@ -186,7 +192,7 @@ export function MemoryPanel({ character, isOpen, onClose, currentChapter }: Memo
           <h2 className="font-display text-xl text-purple-400">Memories</h2>
           <span className="text-sm text-white/60">({filteredMemories.length})</span>
         </div>
-        <Button variant="ghost" size="icon" onClick={onClose} className="text-white/70 hover:text-white hover:bg-white/10">
+        <Button variant="ghost" size="icon" onClick={handleClose} className="text-white/70 hover:text-white hover:bg-white/10">
           <X className="w-5 h-5" />
         </Button>
       </div>

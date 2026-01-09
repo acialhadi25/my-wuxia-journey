@@ -9,6 +9,7 @@ type GoldenFingerPanelProps = {
   isOpen: boolean;
   onClose: () => void;
   onUseAbility?: (abilityId: string) => void;
+  onPanelClose?: () => void; // Called when panel closes (for tutorial)
 };
 
 // Golden Finger abilities based on type
@@ -100,10 +101,15 @@ const GOLDEN_FINGER_ABILITIES: Record<string, Array<{
   ],
 };
 
-export function GoldenFingerPanel({ character, isOpen, onClose, onUseAbility }: GoldenFingerPanelProps) {
+export function GoldenFingerPanel({ character, isOpen, onClose, onUseAbility, onPanelClose }: GoldenFingerPanelProps) {
   const goldenFingerId = character.goldenFinger.id;
   const abilities = GOLDEN_FINGER_ABILITIES[goldenFingerId] || [];
   const isAwakened = character.goldenFingerUnlocked;
+
+  const handleClose = () => {
+    onClose();
+    onPanelClose?.(); // Trigger tutorial callback if exists
+  };
 
   return (
     <div
@@ -120,7 +126,7 @@ export function GoldenFingerPanel({ character, isOpen, onClose, onUseAbility }: 
           <Sparkles className="w-5 h-5 text-gold animate-pulse" />
           <h2 className="font-display text-xl text-gold">Golden Finger</h2>
         </div>
-        <Button variant="ghost" size="icon" onClick={onClose} className="text-white/70 hover:text-white hover:bg-white/10">
+        <Button variant="ghost" size="icon" onClick={handleClose} className="text-white/70 hover:text-white hover:bg-white/10">
           <X className="w-5 h-5" />
         </Button>
       </div>

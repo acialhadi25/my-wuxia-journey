@@ -17,9 +17,14 @@ type StatusPanelProps = {
   character: Character;
   isOpen: boolean;
   onClose: () => void;
+  onPanelClose?: () => void; // Called when panel closes (for tutorial)
 };
 
-export function StatusPanel({ character, isOpen, onClose }: StatusPanelProps) {
+export function StatusPanel({ character, isOpen, onClose, onPanelClose }: StatusPanelProps) {
+  const handleClose = () => {
+    onClose();
+    onPanelClose?.(); // Trigger tutorial callback if exists
+  };
   const healthPercentage = (character.health / character.maxHealth) * 100;
   const qiPercentage = (character.qi / character.maxQi) * 100;
   const staminaPercentage = ((character.stamina || 0) / (character.maxStamina || 100)) * 100;
@@ -48,7 +53,7 @@ export function StatusPanel({ character, isOpen, onClose }: StatusPanelProps) {
       {/* Header */}
       <div className="flex items-center justify-between p-4 sm:p-5 border-b border-white/10 bg-black/50">
         <h2 className="font-display text-xl text-gold">Status</h2>
-        <Button variant="ghost" size="icon" onClick={onClose} className="text-white/70 hover:text-white hover:bg-white/10">
+        <Button variant="ghost" size="icon" onClick={handleClose} className="text-white/70 hover:text-white hover:bg-white/10">
           <X className="w-5 h-5" />
         </Button>
       </div>

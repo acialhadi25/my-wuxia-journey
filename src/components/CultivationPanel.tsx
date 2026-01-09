@@ -10,6 +10,7 @@ type CultivationPanelProps = {
   onClose: () => void;
   onMeditationComplete: (qiGained: number, cultivationGained: number) => void;
   onBreakthroughAttempt: (success: boolean, newRealm?: CultivationRealm, damage?: number) => void;
+  onPanelClose?: () => void; // Called when panel closes (for tutorial)
 };
 
 type MeditationState = 'idle' | 'focusing' | 'gathering' | 'complete';
@@ -19,7 +20,8 @@ export function CultivationPanel({
   isOpen, 
   onClose, 
   onMeditationComplete,
-  onBreakthroughAttempt 
+  onBreakthroughAttempt,
+  onPanelClose
 }: CultivationPanelProps) {
   const [meditationState, setMeditationState] = useState<MeditationState>('idle');
   const [focusLevel, setFocusLevel] = useState(0);
@@ -39,6 +41,12 @@ export function CultivationPanel({
 
   const nextRealm = getNextRealm(character.realm);
   const canBreakthrough = character.breakthroughReady && nextRealm;
+
+  const handleClose = () => {
+    resetState();
+    onClose();
+    onPanelClose?.(); // Trigger tutorial callback if exists
+  };
 
   // Cursor oscillation for timing mini-game
   useEffect(() => {
@@ -241,7 +249,7 @@ export function CultivationPanel({
               {isBreakthroughMode ? 'Breakthrough Attempt' : 'Cultivation Chamber'}
             </h2>
           </div>
-          <Button variant="ghost" size="icon" onClick={() => { resetState(); onClose(); }} className="text-white/70 hover:text-white hover:bg-white/10">
+          <Button variant="ghost" size="icon" onClick={handleClose} className="text-white/70 hover:text-white hover:bg-white/10">
             <X className="w-5 h-5" />
           </Button>
         </div>

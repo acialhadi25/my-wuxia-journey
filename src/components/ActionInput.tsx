@@ -31,51 +31,63 @@ export function ActionInput({ choices, onAction, isLoading, disabled, allowCusto
   };
 
   return (
-    <div className="space-y-2 sm:space-y-3 md:space-y-4">
-      {/* Quick Action Buttons */}
-      {choices.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+    <div className="mb-0">
+      {/* Quick Action Buttons - Fixed Width Cards */}
+      {choices.length > 0 ? (
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-3 px-3 mb-1">
           {choices.map((choice) => (
             <Button
               key={choice.id}
               variant="action"
               size="sm"
               className={cn(
-                "w-full justify-center text-center h-auto min-h-[3rem] sm:min-h-[3.5rem]",
-                "py-2.5 px-3 sm:py-3 sm:px-4 md:px-6",
+                "flex-shrink-0 justify-start text-left h-auto",
+                // Single choice (tutorial): full width
+                choices.length === 1 && "w-full",
+                // Two choices (gameplay): 50% each
+                choices.length === 2 && "w-[calc(50%-4px)] min-w-[160px]",
+                // More than 2 (fallback): scrollable
+                choices.length > 2 && "min-w-[160px] max-w-[200px]",
+                "py-2.5 px-3",
                 "bg-white/10 hover:bg-gold/20 border border-white/20 hover:border-gold/50",
                 "text-white hover:text-gold transition-all duration-300",
-                "text-xs sm:text-sm md:text-base rounded-lg sm:rounded-xl backdrop-blur-md",
-                "touch-manipulation active:scale-95",
-                "whitespace-normal leading-tight",
-                // If there are 4 choices, make the 4th one span 2 columns on mobile
-                choices.length === 4 && choice.id === choices[3].id && "col-span-2 sm:col-span-1"
+                "text-xs sm:text-sm leading-snug",
+                "rounded-lg backdrop-blur-md",
+                "touch-manipulation active:scale-95"
               )}
               onClick={() => handleChoiceClick(choice)}
               disabled={isLoading || disabled}
             >
-              <span className="block leading-tight break-words">{choice.text}</span>
+              <span className="block w-full whitespace-normal break-words">
+                {choice.text}
+              </span>
               {choice.checkType && (
-                <span className="text-[10px] sm:text-xs text-white/40 ml-1.5 sm:ml-2 hidden md:inline">
+                <span className="text-[9px] text-white/40 mt-1 block">
                   [{choice.checkType}]
                 </span>
               )}
             </Button>
           ))}
         </div>
+      ) : (
+        // Placeholder when no choices - maintains layout height
+        <div className="h-[44px] flex items-center justify-center mb-1">
+          <p className="text-xs text-white/40">
+            {isLoading ? 'Generating choices...' : 'Type your action below'}
+          </p>
+        </div>
       )}
 
       {/* Free Text Input */}
       {allowCustomAction ? (
-        <>
-          <form onSubmit={handleSubmit} className="relative">
+        <form onSubmit={handleSubmit} className="relative mb-0">
             <Input
               value={customAction}
               onChange={(e) => setCustomAction(e.target.value)}
               placeholder="Type your own action..."
               className={cn(
-                "bg-black/40 border-white/20 pr-12 sm:pr-14 h-12 sm:h-14 md:h-16 text-sm sm:text-base md:text-lg",
-                "text-white placeholder:text-white/40 rounded-lg sm:rounded-xl backdrop-blur-md",
+                "bg-black/40 border-white/20 pr-12 h-11 text-sm",
+                "text-white placeholder:text-white/40 rounded-lg backdrop-blur-md",
                 "focus:border-gold/50 focus:ring-gold/20 focus:bg-black/50",
                 "touch-manipulation"
               )}
@@ -86,27 +98,22 @@ export function ActionInput({ choices, onAction, isLoading, disabled, allowCusto
               type="submit"
               variant="ghost"
               size="icon"
-              className="absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 h-9 w-9 sm:h-10 sm:w-10 md:h-12 md:w-12 text-gold hover:bg-gold/20 rounded-lg touch-manipulation active:scale-95"
+              className="absolute right-1 top-1/2 -translate-y-1/2 h-9 w-9 text-gold hover:bg-gold/20 rounded-lg touch-manipulation active:scale-95"
               disabled={!customAction.trim() || isLoading || disabled}
             >
               {isLoading ? (
-                <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 animate-spin" />
+                <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
               ) : (
-                <Send className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
+                <Send className="w-4 h-4 sm:w-5 sm:h-5" />
               )}
             </Button>
           </form>
-
-          <p className="text-xs sm:text-sm text-white/40 text-center">
-            Express yourself freely. The Jianghu responds to your actions.
-          </p>
-        </>
       ) : (
-        <div className="p-4 sm:p-6 rounded-xl bg-gold/10 border border-gold/30 backdrop-blur-md">
-          <p className="text-xs sm:text-sm text-gold text-center font-medium">
+        <div className="p-3 rounded-lg bg-gold/10 border border-gold/30 backdrop-blur-md mb-0">
+          <p className="text-xs text-gold text-center font-medium">
             🔒 Awakening in Progress
           </p>
-          <p className="text-xs text-white/60 text-center mt-2">
+          <p className="text-[10px] text-white/60 text-center mt-1">
             Choose from the guided actions above. Custom actions will unlock after your Golden Finger awakens.
           </p>
         </div>
