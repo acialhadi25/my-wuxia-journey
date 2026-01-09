@@ -34,26 +34,29 @@ export function ActionInput({ choices, onAction, isLoading, disabled, allowCusto
     <div className="space-y-2 sm:space-y-3 md:space-y-4">
       {/* Quick Action Buttons */}
       {choices.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {choices.slice(0, 3).map((choice) => (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {choices.map((choice) => (
             <Button
               key={choice.id}
               variant="action"
               size="sm"
               className={cn(
-                "flex-1 min-w-[calc(50%-0.25rem)] sm:min-w-0 sm:flex-initial",
-                "justify-center text-center h-auto py-2.5 px-3 sm:py-3 sm:px-4 md:px-6",
+                "w-full justify-center text-center h-auto min-h-[3rem] sm:min-h-[3.5rem]",
+                "py-2.5 px-3 sm:py-3 sm:px-4 md:px-6",
                 "bg-white/10 hover:bg-gold/20 border border-white/20 hover:border-gold/50",
                 "text-white hover:text-gold transition-all duration-300",
                 "text-xs sm:text-sm md:text-base rounded-lg sm:rounded-xl backdrop-blur-md",
-                "touch-manipulation active:scale-95"
+                "touch-manipulation active:scale-95",
+                "whitespace-normal leading-tight",
+                // If there are 4 choices, make the 4th one span 2 columns on mobile
+                choices.length === 4 && choice.id === choices[3].id && "col-span-2 sm:col-span-1"
               )}
               onClick={() => handleChoiceClick(choice)}
               disabled={isLoading || disabled}
             >
-              <span className="truncate leading-tight">{choice.text}</span>
+              <span className="block leading-tight break-words">{choice.text}</span>
               {choice.checkType && (
-                <span className="text-xs text-white/40 ml-1.5 sm:ml-2 hidden md:inline">
+                <span className="text-[10px] sm:text-xs text-white/40 ml-1.5 sm:ml-2 hidden md:inline">
                   [{choice.checkType}]
                 </span>
               )}

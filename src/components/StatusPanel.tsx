@@ -1,8 +1,10 @@
 import { Character, getRarityColor, getRankColor } from '@/types/game';
 import { cn } from '@/lib/utils';
-import { Heart, Zap, Calendar, Mountain, Sparkles, X } from 'lucide-react';
+import { Heart, Zap, Calendar, Mountain, Sparkles, X, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { ActiveEffectsDisplay } from './ActiveEffectsDisplay';
+import { RegenerationService } from '@/services/regenerationService';
 
 type StatusPanelProps = {
   character: Character;
@@ -14,6 +16,11 @@ export function StatusPanel({ character, isOpen, onClose }: StatusPanelProps) {
   const healthPercentage = (character.health / character.maxHealth) * 100;
   const qiPercentage = (character.qi / character.maxQi) * 100;
   const cultivationProgress = character.cultivationProgress || 0;
+  
+  // Calculate regeneration rates
+  const regen = RegenerationService.calculateRegeneration(character);
+  const effectiveStats = RegenerationService.getEffectiveStats(character);
+  const statModifiers = RegenerationService.calculateStatModifiers(character);
 
   const getHealthColor = () => {
     if (healthPercentage > 60) return 'bg-jade';
@@ -107,16 +114,57 @@ export function StatusPanel({ character, isOpen, onClose }: StatusPanelProps) {
             </div>
           </div>
 
+          {/* Regeneration Info */}
+          <div className="space-y-2 p-3 rounded-xl bg-white/5 border border-white/10">
+            <h4 className="text-xs font-display text-gold/80 flex items-center gap-1">
+              <TrendingUp className="w-3 h-3" /> Regeneration
+            </h4>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-white/60">HP/s:</span>
+                <span className={cn("font-medium", regen.health > 0 ? "text-jade-glow" : "text-white/40")}>
+                  +{regen.health.toFixed(1)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-white/60">Qi/s:</span>
+                <span className={cn("font-medium", regen.qi > 0 ? "text-purple-400" : "text-white/40")}>
+                  +{regen.qi.toFixed(1)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Active Effects */}
+          {character.activeEffects && character.activeEffects.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-sm font-display text-gold/80">Active Effects ({character.activeEffects.length})</h4>
+              <ActiveEffectsDisplay character={character} compact={false} />
+            </div>
+          )}
+
           {/* Stats */}
           <div className="space-y-3">
             <h4 className="text-sm font-display text-gold/80">Attributes</h4>
             <div className="grid grid-cols-2 gap-2 text-sm">
-              {Object.entries(character.stats).slice(0, 5).map(([stat, value]) => (
-                <div key={stat} className="flex justify-between p-3 bg-white/5 rounded-lg border border-white/10">
-                  <span className="text-white/60 capitalize">{stat}</span>
-                  <span className="text-white font-medium">{value}</span>
-                </div>
-              ))}
+              {Object.entries(character.stats).slice(0, 5).map(([stat, value]) => {
+                const modifier = statModifiers[stat as keyof typeof statModifiers] || 0;
+                const effective = effectiveStats[stat as keyof typeof effectiveStats] || value;
+                
+                return (
+                  <div key={stat} className="flex justify-between p-3 bg-white/5 rounded-lg border border-white/10">
+                    <span className="text-white/60 capitalize">{stat}</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-white font-medium">{value}</span>
+                      {modifier !== 0 && (
+                        <span className={cn("text-xs", modifier > 0 ? "text-jade-glow" : "text-red-400")}>
+                          ({modifier > 0 ? '+' : ''}{modifier})
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 

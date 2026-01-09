@@ -19,6 +19,8 @@ import { validateAction } from '@/lib/validation';
 import { gameNotify, notify } from '@/lib/notifications';
 import { trackGameEvent, trackGameTiming } from '@/lib/analytics';
 import { perf } from '@/lib/performance';
+import { useRegeneration } from '@/hooks/useRegeneration';
+import { RegenerationService } from '@/services/regenerationService';
 import {
   generateNarrative,
   saveCharacterToDatabase,
@@ -70,6 +72,9 @@ export function GameScreen({ character, onUpdateCharacter, userId, savedCharacte
   const scrollRef = useRef<HTMLDivElement>(null);
   const { language } = useLanguage(); // Get current language
   const hasInitialized = useRef(false);
+
+  // Enable regeneration system
+  useRegeneration(character, onUpdateCharacter, true);
 
   // Set up realtime subscription for character updates
   useEffect(() => {
@@ -224,10 +229,15 @@ Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone
         
       } catch (error) {
         console.error('Failed to initialize game:', error);
-        notify.error('Connection Error', 'Failed to connect to the world. Please try again.');
         
-        // Fallback to static opening
-        generateFallbackOpening();
+        // Only show fallback if we don't have any messages yet
+        if (messages.length <= 1) {
+          notify.error('Connection Error', 'Failed to connect to the world. Using fallback story.');
+          generateFallbackOpening();
+        } else {
+          // If we already have messages, just log the error
+          console.warn('Error during initialization, but messages already loaded');
+        }
       } finally {
         setIsLoading(false);
       }
@@ -354,6 +364,46 @@ Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone
       }
     }
 
+    // Add new effects
+    if (response.effects_to_add?.length) {
+      for (const effectData of response.effects_to_add) {
+        const effect = {
+          id: crypto.randomUUID(),
+          name: effectData.name,
+          type: effectData.type,
+          description: effectData.description,
+          duration: effectData.duration,
+          startTime: Date.now(),
+          statModifiers: effectData.statModifiers,
+          regenModifiers: effectData.regenModifiers,
+          damageOverTime: effectData.damageOverTime,
+          maxStatModifiers: effectData.maxStatModifiers,
+          isPermanent: effectData.isPermanent || effectData.duration === -1,
+          stackable: effectData.stackable || false,
+          stacks: 1,
+        };
+        
+        updatedCharacter = RegenerationService.addEffect(updatedCharacter, effect);
+        
+        // Notify player
+        const effectIcon = effectData.type === 'buff' || effectData.type === 'blessing' ? '✨' : 
+                          effectData.type === 'debuff' ? '⚠️' :
+                          effectData.type === 'poison' ? '☠️' :
+                          effectData.type === 'curse' ? '👿' :
+                          effectData.type === 'qi_deviation' ? '💥' : '🔮';
+        
+        notify.info(`${effectIcon} ${effectData.name}`, effectData.description);
+      }
+    }
+
+    // Remove effects
+    if (response.effects_to_remove?.length) {
+      for (const effectName of response.effects_to_remove) {
+        updatedCharacter = RegenerationService.removeEffect(updatedCharacter, effectName);
+        notify.success('Effect Removed', `${effectName} has been removed`);
+      }
+    }
+
     // IMMEDIATELY update character state in UI
     onUpdateCharacter(updatedCharacter);
     
@@ -385,9 +435,9 @@ Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone
     
     await updateCharacterInDatabase(charId, {
       stats: updatedCharacter.stats,
-      health: updatedCharacter.health,
+      health: Math.round(updatedCharacter.health),
       max_health: updatedCharacter.maxHealth,
-      qi: updatedCharacter.qi,
+      qi: Math.round(updatedCharacter.qi),
       max_qi: updatedCharacter.maxQi,
       karma: updatedCharacter.karma,
       realm: updatedCharacter.realm,
@@ -395,7 +445,9 @@ Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone
       breakthrough_ready: updatedCharacter.breakthroughReady,
       current_location: response.new_location || currentLocation,
       time_elapsed: response.time_passed || timeElapsed,
-      golden_finger_unlocked: updatedCharacter.goldenFingerUnlocked
+      golden_finger_unlocked: updatedCharacter.goldenFingerUnlocked,
+      active_effects: updatedCharacter.activeEffects || [],
+      last_regeneration: updatedCharacter.lastRegeneration || Date.now()
     });
     
     console.log('✅ Character updates saved to database');

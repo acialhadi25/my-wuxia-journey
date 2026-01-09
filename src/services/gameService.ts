@@ -114,10 +114,12 @@ export async function saveCharacterToDatabase(character: Character, userId: stri
       visual_traits: character.visualTraits,
       current_location: 'Starting Location',
       current_chapter: 1,
-      time_elapsed: 'Day 1'
-      // Temporarily remove tutorial fields until database is updated
-      // tutorial_completed: character.tutorialCompleted || false,
-      // golden_finger_unlocked: character.goldenFingerUnlocked || false
+      time_elapsed: 'Day 1',
+      tutorial_completed: character.tutorialCompleted || false,
+      golden_finger_unlocked: character.goldenFingerUnlocked || false,
+      current_tutorial_step: 0,
+      active_effects: character.activeEffects || [],
+      last_regeneration: character.lastRegeneration || Date.now()
     })
     .select()
     .single();
@@ -150,12 +152,36 @@ export async function updateCharacterInDatabase(
     is_alive: boolean;
     tutorial_completed: boolean;
     golden_finger_unlocked: boolean;
+    active_effects: any[];
+    last_regeneration: number;
   }>
 ): Promise<void> {
-  const { error } = await supabase
+  // Try to update with all fields first
+  let { error } = await supabase
     .from('characters')
     .update(updates)
     .eq('id', characterId);
+
+  // If error is about missing columns, retry without those columns
+  if (error && error.message?.includes('column')) {
+    console.warn('Some columns not found in database, retrying without them:', error.message);
+    
+    // Remove fields that might not exist yet
+    const { active_effects, last_regeneration, ...safeUpdates } = updates;
+    
+    const { error: retryError } = await supabase
+      .from('characters')
+      .update(safeUpdates)
+      .eq('id', characterId);
+    
+    if (retryError) {
+      console.error('Error updating character:', retryError);
+      throw retryError;
+    }
+    
+    console.log('✅ Character updated successfully (without new columns)');
+    return;
+  }
 
   if (error) {
     console.error('Error updating character:', error);

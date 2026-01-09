@@ -48,6 +48,37 @@ export type DeepseekResponse = {
   items_consumed?: string[];
   items_removed?: string[];
   
+  effects_to_add?: Array<{
+    name: string;
+    type: 'buff' | 'debuff' | 'poison' | 'curse' | 'blessing' | 'qi_deviation';
+    description: string;
+    duration: number; // in seconds, -1 for permanent
+    statModifiers?: {
+      strength?: number;
+      agility?: number;
+      intelligence?: number;
+      charisma?: number;
+      luck?: number;
+      cultivation?: number;
+    };
+    regenModifiers?: {
+      healthRegen?: number;
+      qiRegen?: number;
+    };
+    damageOverTime?: {
+      healthDamage?: number;
+      qiDrain?: number;
+    };
+    maxStatModifiers?: {
+      maxHealth?: number;
+      maxQi?: number;
+    };
+    isPermanent?: boolean;
+    stackable?: boolean;
+  }>;
+  
+  effects_to_remove?: string[];
+  
   npc_updates?: Array<{
     name: string;
     favor_change: number;
@@ -188,6 +219,21 @@ ITEM ACQUISITION:
 - Materials are for crafting
 - Treasures have special effects
 
+EFFECTS SYSTEM (NEW):
+- Effects are temporary or permanent buffs/debuffs that modify character stats and regeneration
+- Use effects for: poisons, curses, blessings, injuries, qi deviation, pill effects, technique effects
+- Effect types: buff, debuff, poison, curse, blessing, qi_deviation
+- Effects can modify: stats (strength, agility, etc.), regeneration rates, damage over time, max health/qi
+- Duration in seconds (-1 for permanent)
+- Examples:
+  * Poison: damageOverTime: {healthDamage: 2} (2 HP/sec), duration: 60
+  * Blessing: statModifiers: {strength: 5, agility: 5}, duration: 300
+  * Qi Deviation: damageOverTime: {healthDamage: 5, qiDrain: 3}, statModifiers: {intelligence: -10}, duration: 120
+  * Regeneration Pill: regenModifiers: {healthRegen: 5, qiRegen: 3}, duration: 60
+  * Curse: statModifiers: {luck: -5}, isPermanent: true
+- Use effects_to_add to apply new effects, effects_to_remove to remove them
+- Damage over time can kill the character if health reaches 0
+
 REALM BREAKTHROUGH:
 When cultivation_progress >= 100 AND player attempts breakthrough:
 - Success: new_realm set, cultivation_progress reset to 0, max_qi/max_health increase
@@ -238,6 +284,23 @@ RESPONSE FORMAT (STRICT JSON):
   
   "items_consumed": ["Item Name"],
   "items_removed": ["Item Name"],
+  
+  "effects_to_add": [
+    {
+      "name": "Effect Name",
+      "type": "buff|debuff|poison|curse|blessing|qi_deviation",
+      "description": "What the effect does",
+      "duration": 60,
+      "statModifiers": {"strength": 0, "agility": 0, "intelligence": 0, "charisma": 0, "luck": 0, "cultivation": 0},
+      "regenModifiers": {"healthRegen": 0, "qiRegen": 0},
+      "damageOverTime": {"healthDamage": 0, "qiDrain": 0},
+      "maxStatModifiers": {"maxHealth": 0, "maxQi": 0},
+      "isPermanent": false,
+      "stackable": false
+    }
+  ],
+  
+  "effects_to_remove": ["Effect Name"],
   
   "npc_updates": [{"name": "NPC Name", "favor_change": 0, "grudge_change": 0, "new_status": "neutral"}],
   

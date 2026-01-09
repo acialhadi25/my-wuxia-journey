@@ -89,6 +89,43 @@ export type Character = {
   visualTraits: VisualTraits;
   tutorialCompleted?: boolean;
   goldenFingerUnlocked?: boolean;
+  activeEffects?: ActiveEffect[]; // New: Active buffs/debuffs
+  lastRegeneration?: number; // New: Timestamp for regeneration
+};
+
+export type EffectType = 'buff' | 'debuff' | 'poison' | 'curse' | 'blessing' | 'qi_deviation';
+
+export type ActiveEffect = {
+  id: string;
+  name: string;
+  type: EffectType;
+  description: string;
+  icon?: string;
+  duration: number; // in seconds, -1 for permanent
+  startTime: number; // timestamp
+  statModifiers?: {
+    strength?: number;
+    agility?: number;
+    intelligence?: number;
+    charisma?: number;
+    luck?: number;
+    cultivation?: number;
+  };
+  regenModifiers?: {
+    healthRegen?: number; // per second
+    qiRegen?: number; // per second
+  };
+  damageOverTime?: {
+    healthDamage?: number; // per second
+    qiDrain?: number; // per second
+  };
+  maxStatModifiers?: {
+    maxHealth?: number;
+    maxQi?: number;
+  };
+  isPermanent?: boolean;
+  stackable?: boolean;
+  stacks?: number;
 };
 
 export type Relationship = {
