@@ -7,11 +7,12 @@ import { CultivationPanel } from './CultivationPanel';
 import { InventoryPanel } from './InventoryPanel';
 import { TechniquesPanel } from './TechniquesPanel';
 import { GoldenFingerPanel } from './GoldenFingerPanel';
+import { MemoryPanel } from './MemoryPanel';
 import { Button } from '@/components/ui/button';
 import { MobileButton } from './MobileButton';
 import { SEO } from './SEO';
 import { NarrativeSkeleton } from './LoadingSkeleton';
-import { User, MapPin, Clock, LogOut, Sparkles, Save, Swords, Package } from 'lucide-react';
+import { User, MapPin, Clock, LogOut, Sparkles, Save, Swords, Package, Brain } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { saveToLocalStorage, autoSaveCharacter, saveLastChoices, loadLastChoices } from '@/services/autoSaveService';
@@ -65,6 +66,7 @@ export function GameScreen({ character, onUpdateCharacter, userId, savedCharacte
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
   const [isTechniquesOpen, setIsTechniquesOpen] = useState(false);
   const [isGoldenFingerOpen, setIsGoldenFingerOpen] = useState(false);
+  const [isMemoryOpen, setIsMemoryOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [currentLocation, setCurrentLocation] = useState('Starting Location');
@@ -476,12 +478,61 @@ Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone
       setIsSaving(false);
     }
 
-    // Save important events to memory
+    // Save important events to memory using new Memory System
     if (response.event_to_remember) {
+      try {
+        const { MemoryService } = await import('@/services/memoryService');
+        const { extractKeywords, getImportanceScore } = await import('@/types/memory');
+        
+        // Store in new memory system
+        await MemoryService.storeMemory({
+          characterId: charId,
+          timestamp: Date.now(),
+          chapter: currentChapter,
+          eventType: response.event_to_remember.event_type,
+          summary: response.event_to_remember.summary,
+          fullNarrative: response.narrative,
+          importance: response.event_to_remember.importance,
+          importanceScore: getImportanceScore(response.event_to_remember.importance),
+          emotion: response.event_to_remember.emotion,
+          location: response.new_location || currentLocation,
+          involvedNPCs: response.event_to_remember.involved_npcs || [],
+          tags: response.event_to_remember.tags || [],
+          keywords: extractKeywords(response.narrative),
+          karmaChange: response.stat_changes?.karma,
+          statChanges: response.stat_changes,
+          relationshipChanges: response.npc_updates?.map(npc => ({
+            npcId: npc.name,
+            favorChange: npc.favor_change,
+            grudgeChange: npc.grudge_change
+          }))
+        });
+        
+        console.log(`📝 Memory stored: ${response.event_to_remember.summary}`);
+      } catch (error) {
+        console.error('Failed to store memory:', error);
+      }
+      
+      // Also save to old story_events table for backward compatibility
       await saveStoryEvent(charId, {
-        ...response.event_to_remember,
+        summary: response.event_to_remember.summary,
+        importance: response.event_to_remember.importance,
+        type: response.event_to_remember.event_type,
         chapter: currentChapter
       });
+    }
+    
+    // Handle memory callbacks (when past events trigger consequences)
+    if (response.memory_callback) {
+      console.log(`🔄 Memory callback triggered: ${response.memory_callback.callback_type}`);
+      console.log(`   ${response.memory_callback.description}`);
+      
+      // Show notification for dramatic callbacks
+      if (response.memory_callback.callback_type === 'revenge') {
+        notify.warning('Past Returns', 'Your past actions have consequences...');
+      } else if (response.memory_callback.callback_type === 'gratitude') {
+        notify.success('Karma Returns', 'Your good deeds are remembered!');
+      }
     }
 
     // Handle death
@@ -633,7 +684,16 @@ Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone
     try {
       // Measure AI response time
       perf.start('AI Response');
-      const response = await generateNarrative(character, sanitizedAction, characterId, language);
+      const response = await generateNarrative(
+        character, 
+        sanitizedAction, 
+        characterId, 
+        language,
+        {
+          currentLocation,
+          currentChapter
+        }
+      );
       const responseTime = perf.end('AI Response');
       
       // Track response time
@@ -859,6 +919,14 @@ Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone
               >
                 <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 fill-current" />
               </Button>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => setIsMemoryOpen(true)}
+                className="h-9 w-9 sm:h-10 sm:w-10 md:h-11 md:w-11 text-white/70 hover:text-purple-400 hover:bg-white/10 touch-manipulation"
+              >
+                <Brain className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
+              </Button>
             </div>
           
           <div className="text-center flex-1 px-1 sm:px-2 min-w-0">
@@ -996,6 +1064,22 @@ Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone
           setIsGoldenFingerOpen(false);
           handleAction(`Use Golden Finger ability: ${abilityId}`);
         }}
+      />
+
+      {/* Memory Panel Overlay */}
+      {isMemoryOpen && (
+        <div 
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40"
+          onClick={() => setIsMemoryOpen(false)}
+        />
+      )}
+
+      {/* Memory Panel */}
+      <MemoryPanel
+        character={character}
+        isOpen={isMemoryOpen}
+        onClose={() => setIsMemoryOpen(false)}
+        currentChapter={currentChapter}
       />
       </div>
     </>

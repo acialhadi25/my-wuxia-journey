@@ -30,7 +30,11 @@ export async function generateNarrative(
   character: Character,
   action: string,
   characterId?: string,
-  language?: 'en' | 'id' // Add language parameter
+  language?: 'en' | 'id', // Add language parameter
+  additionalContext?: {
+    currentLocation?: string;
+    currentChapter?: number;
+  }
 ): Promise<AIResponse> {
   try {
     // Fetch story events, NPC relationships, techniques, and items
@@ -75,14 +79,17 @@ export async function generateNarrative(
       if (messagesResult.data) recentMessages = messagesResult.data.reverse();
     }
 
-    // Use Deepseek service with language parameter
+    // Use Deepseek service with language parameter and memory context
     const response = await DeepseekService.generateNarrative(character, action, {
       recentMessages,
       storyEvents,
       npcRelationships,
       techniques,
       inventory,
-      language // Pass language to Deepseek
+      language, // Pass language to Deepseek
+      characterId, // Pass characterId for memory system
+      currentLocation: additionalContext?.currentLocation,
+      currentChapter: additionalContext?.currentChapter
     });
 
     return response;

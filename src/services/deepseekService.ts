@@ -1,5 +1,6 @@
 import { Character, GameMessage, GameChoice, Technique, InventoryItem, CultivationRealm } from '@/types/game';
 import { getLanguageInstruction } from '@/contexts/LanguageContext';
+import { MemoryEventType, MemoryImportance, MemoryEmotion } from '@/types/memory';
 
 export type DeepseekResponse = {
   narrative: string;
@@ -93,10 +94,21 @@ export type DeepseekResponse = {
   new_location?: string | null;
   time_passed?: string | null;
   
+  // Memory system fields (enhanced)
   event_to_remember?: {
     summary: string;
-    importance: number;
-    type: string;
+    importance: MemoryImportance;
+    event_type: MemoryEventType;
+    emotion?: MemoryEmotion;
+    involved_npcs?: string[];
+    tags?: string[];
+  } | null;
+  
+  // Memory callbacks (when past events trigger consequences)
+  memory_callback?: {
+    triggered_by_memory_id?: string;
+    callback_type: 'revenge' | 'gratitude' | 'recognition' | 'reputation' | 'consequence';
+    description: string;
   } | null;
   
   suggested_actions?: Array<{
@@ -641,6 +653,114 @@ When cultivation_progress >= 100 AND player attempts breakthrough:
 - Failure: health damage, possible Qi deviation, cultivation progress loss
 - Realm order: Mortal → Qi Condensation → Foundation Establishment → Core Formation → Nascent Soul → Spirit Severing → Dao Seeking → Immortal Ascension
 
+🧠 LONG-TERM MEMORY SYSTEM (CRITICAL):
+
+**THE WORLD REMEMBERS EVERYTHING**
+
+This is NOT a one-shot story. Every action has long-term consequences. NPCs remember. The world reacts. Past events trigger future callbacks.
+
+**MEMORY CONTEXT PROVIDED**:
+Above, you received MEMORY/KARMA CONTEXT showing relevant past events. These memories are CRITICAL for:
+- NPC reactions (they remember what player did)
+- World state (consequences of past actions)
+- Reputation (fame or infamy spreads)
+- Revenge scenarios (kill someone → their family seeks revenge later)
+- Gratitude callbacks (save someone → they help you later)
+
+**WHEN TO FLAG EVENTS FOR MEMORY**:
+
+Use event_to_remember field when:
+1. **Critical Events** (importance: "critical"):
+   - Murder, betrayal, major theft
+   - Saving someone's life
+   - Sect-level decisions
+   - Breakthrough to new realm
+   - Obtaining legendary items
+   - Making powerful enemies/allies
+
+2. **Important Events** (importance: "important"):
+   - Combat victories/defeats
+   - Significant NPC interactions
+   - Learning rare techniques
+   - Discovering secrets
+   - Karma-changing actions (±10 or more)
+   - Joining/leaving organizations
+
+3. **Moderate Events** (importance: "moderate"):
+   - Regular NPC interactions
+   - Item acquisitions
+   - Location discoveries
+   - Minor conflicts
+   - Technique usage in important moments
+
+**DO NOT flag trivial events** (walking, eating, sleeping, casual conversations)
+
+**EVENT_TO_REMEMBER FORMAT**:
+{
+  "event_to_remember": {
+    "summary": "Brief 1-sentence summary (e.g., 'Killed Zhao Wei in Misty Forest')",
+    "importance": "trivial|minor|moderate|important|critical",
+    "event_type": "combat|social|cultivation|betrayal|alliance|murder|rescue|theft|discovery|breakthrough|death|romance|grudge|favor|sect_event|treasure|technique_learned|item_obtained|location_discovered|npc_met|quest_completed|other",
+    "emotion": "joy|anger|fear|sadness|disgust|surprise|pride|shame|guilt|gratitude|hatred|love|neutral",
+    "involved_npcs": ["NPC Name 1", "NPC Name 2"],
+    "tags": ["combat", "witnessed", "grudge_trigger", "revenge_seed"]
+  }
+}
+
+**MEMORY CALLBACKS**:
+
+When MEMORY/KARMA CONTEXT shows relevant past events, you MUST:
+
+1. **Reference the Memory in Narrative**:
+   - NPC recognizes player from past event
+   - Location triggers flashback
+   - Reputation precedes player
+   - Consequences manifest
+
+2. **NPC Reactions Based on Memory**:
+   - If player killed NPC's relative → NPC is hostile, seeks revenge
+   - If player saved NPC before → NPC is grateful, offers help
+   - If player betrayed faction → Faction members attack on sight
+   - If player has high karma → Righteous NPCs are friendly
+   - If player has low karma → Demonic cultivators respect them
+
+3. **Use memory_callback Field**:
+{
+  "memory_callback": {
+    "callback_type": "revenge|gratitude|recognition|reputation|consequence",
+    "description": "Elder Zhao recognizes you as the one who killed his grandson Zhao Wei 20 chapters ago"
+  }
+}
+
+**EXAMPLE MEMORY-DRIVEN SCENARIO**:
+
+Memory Context shows: "Chapter 5: Killed Zhao Wei in Misty Forest (witnessed by Old Beggar)"
+
+Current Situation: Player enters Sky Sect (Chapter 25)
+
+Your Response Should Include:
+- Narrative: "As you step through the grand gates of Sky Sect, an elderly man in crimson robes suddenly blocks your path. His eyes burn with barely contained fury. 'You!' Elder Zhao's voice trembles with rage. 'Twenty years I've searched for the one who murdered my grandson in Misty Forest. The Old Beggar told me everything. Today, you pay with your life!'"
+- memory_callback: { "callback_type": "revenge", "description": "Elder Zhao seeks revenge for grandson's death 20 chapters ago" }
+- npc_updates: [{ "name": "Elder Zhao", "favor_change": -100, "grudge_change": 100, "new_status": "enemy" }]
+
+**CRITICAL MEMORY RULES**:
+1. ALWAYS check MEMORY/KARMA CONTEXT before generating response
+2. ALWAYS reference relevant memories in narrative
+3. ALWAYS make NPCs react based on past interactions
+4. ALWAYS flag important events for future memory
+5. NEVER ignore provided memory context
+6. NEVER let player escape consequences of past actions
+7. ALWAYS make the world feel alive and reactive
+
+**MEMORY-DRIVEN STORYTELLING**:
+- Chapter 1 murder → Chapter 50 revenge
+- Chapter 10 favor → Chapter 40 ally appears
+- Chapter 5 theft → Chapter 30 reputation catches up
+- Chapter 15 betrayal → Chapter 60 faction hunts you
+- Chapter 20 rescue → Chapter 70 saved person returns favor
+
+The world is NOT static. It REMEMBERS. It REACTS. It EVOLVES.
+
 RESPONSE FORMAT (STRICT JSON):
 
 CRITICAL JSON RULES:
@@ -717,7 +837,19 @@ CRITICAL JSON RULES:
   "new_location": null,
   "time_passed": null,
   
-  "event_to_remember": {"summary": "Brief summary", "importance": 1, "type": "combat|social|discovery|cultivation|death"},
+  "event_to_remember": {
+    "summary": "Brief 1-sentence summary of what happened",
+    "importance": "trivial|minor|moderate|important|critical",
+    "event_type": "combat|social|cultivation|betrayal|alliance|murder|rescue|theft|discovery|breakthrough|death|romance|grudge|favor|sect_event|treasure|technique_learned|item_obtained|location_discovered|npc_met|quest_completed|other",
+    "emotion": "joy|anger|fear|sadness|disgust|surprise|pride|shame|guilt|gratitude|hatred|love|neutral",
+    "involved_npcs": ["NPC Name 1", "NPC Name 2"],
+    "tags": ["tag1", "tag2", "tag3"]
+  },
+  
+  "memory_callback": {
+    "callback_type": "revenge|gratitude|recognition|reputation|consequence",
+    "description": "How past memory influences current situation"
+  },
   
   "suggested_actions": [
     {"text": "Action description", "type": "action|combat|flee", "check_type": "strength|agility|intelligence|charisma|luck|null"}
@@ -908,6 +1040,9 @@ export class DeepseekService {
       techniques?: any[];
       inventory?: any[];
       language?: 'en' | 'id';
+      characterId?: string;
+      currentLocation?: string;
+      currentChapter?: number;
     } = {}
   ): Promise<DeepseekResponse> {
     try {
@@ -915,10 +1050,38 @@ export class DeepseekService {
       const language = context.language || 'en';
       const languageInstruction = getLanguageInstruction(language);
       
-      // Build context strings
-      const memoryContext = context.storyEvents && context.storyEvents.length > 0
-        ? context.storyEvents.map((e: any) => `[Ch.${e.chapter}] ${e.summary} (Importance: ${e.importance})`).join('\n')
-        : 'No significant events recorded yet.';
+      // Build memory context using MemoryService if characterId provided
+      let memoryContext = 'No significant events recorded yet.';
+      
+      if (context.characterId) {
+        try {
+          const { MemoryService } = await import('./memoryService');
+          const { formatMemoriesForPrompt } = await import('@/types/memory');
+          
+          // Build memory query from current action and context
+          const memoryQueryContext = await MemoryService.buildMemoryContext(
+            context.characterId,
+            action,
+            {
+              includeLocation: context.currentLocation,
+              maxMemories: 5
+            }
+          );
+          
+          if (memoryQueryContext.relevantMemories.length > 0) {
+            memoryContext = formatMemoriesForPrompt(memoryQueryContext.relevantMemories);
+          }
+        } catch (error) {
+          console.warn('Failed to load memory context, using fallback:', error);
+          // Fallback to old story events method
+          memoryContext = context.storyEvents && context.storyEvents.length > 0
+            ? context.storyEvents.map((e: any) => `[Ch.${e.chapter}] ${e.summary} (Importance: ${e.importance})`).join('\n')
+            : 'No significant events recorded yet.';
+        }
+      } else if (context.storyEvents && context.storyEvents.length > 0) {
+        // Fallback to old method if no characterId
+        memoryContext = context.storyEvents.map((e: any) => `[Ch.${e.chapter}] ${e.summary} (Importance: ${e.importance})`).join('\n');
+      }
 
       const npcContext = context.npcRelationships && context.npcRelationships.length > 0
         ? context.npcRelationships.map((npc: any) => 
