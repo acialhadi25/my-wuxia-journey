@@ -97,40 +97,47 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   });
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Load language from database when user logs in (only once on mount)
+  // Load language from localStorage and database on mount
   useEffect(() => {
     if (isInitialized) return;
     
-    const loadLanguageFromDB = async () => {
+    const initLanguage = async () => {
+      // First, load from localStorage
+      const savedLanguage = localStorage.getItem('game_language') as Language;
+      if (savedLanguage && (savedLanguage === 'en' || savedLanguage === 'id')) {
+        setLanguageState(savedLanguage);
+      }
+      
+      // Then, try to sync from database
       try {
         const { data: { user } } = await supabase.auth.getUser();
         
         if (user) {
-          const { data: profile } = await supabase
+          const { data: profile, error } = await supabase
             .from('profiles')
             .select('language_preference')
-            .eq('id', user.id)
-            .single();
+            .eq('user_id', user.id)
+            .maybeSingle();
           
-          if (profile && profile.language_preference) {
+          if (!error && profile?.language_preference) {
             const dbLanguage = profile.language_preference as Language;
-            const currentLanguage = localStorage.getItem('game_language') as Language || 'en';
-            
-            if (dbLanguage !== currentLanguage) {
-              console.log('Loading language from database:', dbLanguage);
+            if (dbLanguage !== savedLanguage) {
+              console.log('✅ Language synced from database:', dbLanguage);
               setLanguageState(dbLanguage);
               localStorage.setItem('game_language', dbLanguage);
             }
+          } else if (error) {
+            console.debug('Could not load language from database:', error.message);
           }
         }
       } catch (error) {
-        console.log('Could not load language from database:', error);
-      } finally {
-        setIsInitialized(true);
+        console.debug('Could not load language from database:', error);
       }
+      
+      setIsInitialized(true);
     };
-
-    loadLanguageFromDB();
+    
+    initLanguage();
   }, [isInitialized]);
 
   // Save language to localStorage and database when it changes
@@ -150,16 +157,16 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
           const { error } = await supabase
             .from('profiles')
             .update({ language_preference: language })
-            .eq('id', user.id);
+            .eq('user_id', user.id);
           
-          if (error) {
-            console.error('Failed to save language to database:', error);
+          if (!error) {
+            console.log('✅ Language saved to database:', language);
           } else {
-            console.log('Language saved to database:', language);
+            console.debug('Could not save language to database:', error.message);
           }
         }
       } catch (error) {
-        console.log('Could not save language to database:', error);
+        console.debug('Could not save language to database:', error);
       }
     };
 

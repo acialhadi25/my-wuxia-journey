@@ -158,11 +158,11 @@ const Index = () => {
           supabase.from('npc_relationships').delete().eq('character_id', character.id),
           supabase.from('character_techniques').delete().eq('character_id', character.id),
           supabase.from('character_items').delete().eq('character_id', character.id),
-          supabase.from('tutorial_steps').delete().eq('character_id', character.id),
+          supabase.from('memory_events').delete().eq('character_id', character.id), // Added memory_events
         ]);
         
         // Log results
-        const tableNames = ['chat_messages', 'story_events', 'npc_relationships', 'character_techniques', 'character_items', 'tutorial_steps'];
+        const tableNames = ['chat_messages', 'story_events', 'npc_relationships', 'character_techniques', 'character_items', 'memory_events'];
         deletionResults.forEach((result, index) => {
           if (result.status === 'fulfilled') {
             const { error, count } = result.value;
