@@ -2,11 +2,11 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { goldenFingers } from '@/data/goldenFingers';
+import { spiritualRoots, SpiritualRoot } from '@/data/spiritualRoots';
 import { GoldenFinger, Character, CharacterStats, GeneratedOrigin } from '@/types/game';
 import { Sparkles, ChevronRight, ChevronLeft, Dices, Check, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DeepseekService } from '@/services/deepseekService';
-import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { validateCharacterName } from '@/lib/validation';
@@ -15,7 +15,7 @@ import { notify } from '@/lib/notifications';
 import { perf } from '@/lib/performance';
 import { SEO } from '@/components/SEO';
 
-type Step = 'name' | 'origin' | 'golden-finger' | 'confirm';
+type Step = 'basics' | 'golden-finger' | 'fate' | 'confirm';
 
 type CharacterCreationProps = {
   onComplete: (character: Character) => void;
@@ -24,25 +24,18 @@ type CharacterCreationProps = {
 };
 
 export function CharacterCreation({ onComplete, onBack, userId }: CharacterCreationProps) {
-  const [step, setStep] = useState<Step>('name');
+  const [step, setStep] = useState<Step>('basics');
   const [name, setName] = useState('');
   const [gender, setGender] = useState<'Male' | 'Female' | ''>('');
-  const [generatedOrigin, setGeneratedOrigin] = useState<GeneratedOrigin | null>(null);
+  const [selectedSpiritRoot, setSelectedSpiritRoot] = useState<SpiritualRoot | null>(null);
   const [selectedGoldenFinger, setSelectedGoldenFinger] = useState<GoldenFinger | null>(null);
+  const [generatedOrigin, setGeneratedOrigin] = useState<GeneratedOrigin | null>(null);
   const [isRolling, setIsRolling] = useState(false);
-  const { toast } = useToast();
-  const { language } = useLanguage(); // Get current language
+  const { language } = useLanguage();
 
   const rollFate = async () => {
-    // Validate name
-    const nameValidation = validateCharacterName(name);
-    if (!nameValidation.success) {
-      notify.error('Invalid Name', nameValidation.error);
-      return;
-    }
-
-    if (!gender) {
-      notify.warning('Select Gender', 'The heavens must know your true nature.');
+    if (!name || !gender || !selectedSpiritRoot || !selectedGoldenFinger) {
+      notify.error('Missing Information', 'Please complete all previous steps first.');
       return;
     }
 
@@ -51,7 +44,16 @@ export function CharacterCreation({ onComplete, onBack, userId }: CharacterCreat
 
     try {
       perf.start('Generate Fate');
-      const origin = await DeepseekService.generateFate(nameValidation.data!, gender, language);
+      
+      // Generate fate with full context
+      const origin = await DeepseekService.generateFate(
+        name, 
+        gender, 
+        language,
+        selectedSpiritRoot.element,
+        selectedGoldenFinger.name
+      );
+      
       perf.end('Generate Fate');
       
       setGeneratedOrigin(origin as GeneratedOrigin);
@@ -92,11 +94,7 @@ export function CharacterCreation({ onComplete, onBack, userId }: CharacterCreat
         },
       ];
       setGeneratedOrigin(fallbackOrigins[Math.floor(Math.random() * fallbackOrigins.length)]);
-      
-      toast({
-        title: "Fate Generated",
-        description: "Your origin story has been created.",
-      });
+      notify.success('Fate Generated', 'Your origin story has been created.');
     } finally {
       setIsRolling(false);
     }
@@ -104,13 +102,25 @@ export function CharacterCreation({ onComplete, onBack, userId }: CharacterCreat
 
   const createCharacter = (): Character => {
     const origin = generatedOrigin!;
+    const spiritRoot = selectedSpiritRoot!;
+    
+    // Apply spirit root bonuses
+    const spiritRootBonuses = {
+      strength: spiritRoot.bonuses.strength || 0,
+      agility: spiritRoot.bonuses.agility || 0,
+      intelligence: spiritRoot.bonuses.intelligence || 0,
+      charisma: spiritRoot.bonuses.charisma || 0,
+      luck: spiritRoot.bonuses.luck || 0,
+      cultivation: spiritRoot.bonuses.cultivation || 0,
+    };
+    
     const baseStats: CharacterStats = {
-      strength: 10 + (origin.bonuses.strength || 0) + (origin.penalties.strength || 0),
-      agility: 10 + (origin.bonuses.agility || 0) + (origin.penalties.agility || 0),
-      intelligence: 10 + (origin.bonuses.intelligence || 0) + (origin.penalties.intelligence || 0),
-      charisma: 10 + (origin.bonuses.charisma || 0) + (origin.penalties.charisma || 0),
-      luck: 10 + (origin.bonuses.luck || 0) + (origin.penalties.luck || 0),
-      cultivation: 0 + (origin.bonuses.cultivation || 0) + (origin.penalties.cultivation || 0),
+      strength: 10 + (origin.bonuses.strength || 0) + (origin.penalties.strength || 0) + spiritRootBonuses.strength,
+      agility: 10 + (origin.bonuses.agility || 0) + (origin.penalties.agility || 0) + spiritRootBonuses.agility,
+      intelligence: 10 + (origin.bonuses.intelligence || 0) + (origin.penalties.intelligence || 0) + spiritRootBonuses.intelligence,
+      charisma: 10 + (origin.bonuses.charisma || 0) + (origin.penalties.charisma || 0) + spiritRootBonuses.charisma,
+      luck: 10 + (origin.bonuses.luck || 0) + (origin.penalties.luck || 0) + spiritRootBonuses.luck,
+      cultivation: 0 + (origin.bonuses.cultivation || 0) + (origin.penalties.cultivation || 0) + spiritRootBonuses.cultivation,
       lifespan: 80,
       currentAge: 16,
     };
@@ -119,7 +129,7 @@ export function CharacterCreation({ onComplete, onBack, userId }: CharacterCreat
       id: crypto.randomUUID(),
       name,
       origin: origin.title,
-      spiritRoot: origin.spiritRoot,
+      spiritRoot: spiritRoot.element,
       realm: 'Mortal',
       goldenFinger: selectedGoldenFinger!,
       stats: baseStats,
@@ -148,11 +158,7 @@ export function CharacterCreation({ onComplete, onBack, userId }: CharacterCreat
 
   const handleComplete = async () => {
     if (!userId) {
-      toast({
-        title: "Authentication Required",
-        description: "Please login to save your character.",
-        variant: "destructive"
-      });
+      notify.error('Authentication Required', 'Please login to save your character.');
       return;
     }
 
@@ -187,15 +193,15 @@ export function CharacterCreation({ onComplete, onBack, userId }: CharacterCreat
 
   const canProceed = () => {
     switch (step) {
-      case 'name': return name.trim().length >= 2 && gender !== '';
-      case 'origin': return generatedOrigin !== null;
+      case 'basics': return name.trim().length >= 2 && gender !== '' && selectedSpiritRoot !== null;
       case 'golden-finger': return selectedGoldenFinger !== null;
+      case 'fate': return generatedOrigin !== null;
       default: return true;
     }
   };
 
   const nextStep = () => {
-    const steps: Step[] = ['name', 'origin', 'golden-finger', 'confirm'];
+    const steps: Step[] = ['basics', 'golden-finger', 'fate', 'confirm'];
     const currentIndex = steps.indexOf(step);
     if (currentIndex < steps.length - 1) {
       setStep(steps[currentIndex + 1]);
@@ -203,7 +209,7 @@ export function CharacterCreation({ onComplete, onBack, userId }: CharacterCreat
   };
 
   const prevStep = () => {
-    const steps: Step[] = ['name', 'origin', 'golden-finger', 'confirm'];
+    const steps: Step[] = ['basics', 'golden-finger', 'fate', 'confirm'];
     const currentIndex = steps.indexOf(step);
     if (currentIndex > 0) {
       setStep(steps[currentIndex - 1]);
@@ -238,21 +244,21 @@ export function CharacterCreation({ onComplete, onBack, userId }: CharacterCreat
             Chapter 0
           </p>
           <h1 className="font-display text-2xl sm:text-3xl md:text-4xl text-gold-gradient drop-shadow-lg">
-            {step === 'name' && 'Choose Your Name'}
-            {step === 'origin' && 'Roll Your Fate'}
+            {step === 'basics' && 'Choose Your Path'}
             {step === 'golden-finger' && 'Select Your Cheat'}
+            {step === 'fate' && 'Roll Your Fate'}
             {step === 'confirm' && 'Confirm Your Path'}
           </h1>
         </div>
 
         {/* Progress Indicator */}
         <div className="flex justify-center gap-3 mb-6 sm:mb-8">
-          {['name', 'origin', 'golden-finger', 'confirm'].map((s, i) => (
+          {['basics', 'golden-finger', 'fate', 'confirm'].map((s, i) => (
             <div
               key={s}
               className={cn(
                 'h-2 rounded-full transition-all duration-500',
-                step === s ? 'bg-gold w-10 shadow-lg shadow-gold/50' : i < ['name', 'origin', 'golden-finger', 'confirm'].indexOf(step) ? 'bg-gold/60 w-2' : 'bg-white/20 w-2'
+                step === s ? 'bg-gold w-10 shadow-lg shadow-gold/50' : i < ['basics', 'golden-finger', 'fate', 'confirm'].indexOf(step) ? 'bg-gold/60 w-2' : 'bg-white/20 w-2'
               )}
             />
           ))}
@@ -260,7 +266,7 @@ export function CharacterCreation({ onComplete, onBack, userId }: CharacterCreat
 
         {/* Content */}
         <div className="flex-1 max-w-lg mx-auto w-full">
-          {step === 'name' && (
+          {step === 'basics' && (
             <div className="space-y-6 animate-fade-in p-6 sm:p-8 rounded-2xl bg-black/40 backdrop-blur-md border border-white/10">
               <p className="text-white/70 text-center text-base sm:text-lg leading-relaxed">
                 In the Jianghu, your name is your legend. Choose wisely.
@@ -304,15 +310,47 @@ export function CharacterCreation({ onComplete, onBack, userId }: CharacterCreat
                     </Button>
                   </div>
                 </div>
+
+                {/* Spiritual Root Selection */}
+                <div className="space-y-3">
+                  <p className="text-white/60 text-center text-sm">Select your spiritual root:</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {spiritualRoots.map((root) => (
+                      <button
+                        key={root.element}
+                        onClick={() => setSelectedSpiritRoot(root)}
+                        className={cn(
+                          "p-3 rounded-xl border text-left transition-all duration-300 backdrop-blur-md",
+                          selectedSpiritRoot?.element === root.element
+                            ? "bg-gold/20 border-gold shadow-lg shadow-gold/20 scale-[1.02]"
+                            : "bg-white/10 hover:bg-white/20 border-white/20"
+                        )}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-2xl">{root.icon}</span>
+                          <div className="flex-1 min-w-0">
+                            <h4 className={cn(
+                              "font-display text-sm",
+                              selectedSpiritRoot?.element === root.element ? "text-gold" : "text-white"
+                            )}>
+                              {root.element}
+                            </h4>
+                            <p className="text-xs text-white/50 truncate">{root.description}</p>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
               
               <p className="text-xs sm:text-sm text-white/40 text-center">
-                Name: 2-20 characters • Gender: Required for story generation
+                Name: 2-20 characters • Gender & Spirit Root: Required for story generation
               </p>
             </div>
           )}
 
-          {step === 'origin' && (
+          {step === 'fate' && (
             <div className="space-y-6 animate-fade-in">
               <div className="p-6 sm:p-8 rounded-2xl bg-black/40 backdrop-blur-md border border-white/10">
                 <p className="text-white/70 text-center mb-6 text-base sm:text-lg leading-relaxed">

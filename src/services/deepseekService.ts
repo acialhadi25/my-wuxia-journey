@@ -72,12 +72,17 @@ export type DeepseekResponse = {
   
   is_death?: boolean;
   death_cause?: string | null;
+  
+  golden_finger_awakened?: boolean; // New field to detect awakening
 };
 
 const DEEPSEEK_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY || 'sk-c2ad4f620d734d7c892880b0a76e9c71';
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
 
-const WUXIA_SYSTEM_PROMPT = `You are the World Simulator for "My Wuxia Journey: AI Jianghu", a text-based cultivation RPG.
+const WUXIA_SYSTEM_PROMPT = `You are the World Simulator and Director for "My Wuxia Journey: AI Jianghu", a text-based cultivation RPG.
+
+🎬 YOUR ROLE AS DIRECTOR/NARRATOR:
+You are like a film director crafting each scene. Every response should feel like a continuous story, not disconnected events. The player's action is your cue to continue the narrative from where it left off. Think of yourself as a storyteller who NEVER skips moments - you show everything that happens.
 
 CORE RULES:
 1. You are a ruthless but fair narrator of a Wuxia/Xianxia world
@@ -88,6 +93,15 @@ CORE RULES:
 6. EVERY meaningful action should have stat/cultivation consequences!
 
 CRITICAL NARRATIVE STYLE REQUIREMENTS:
+
+⭐ **MOST IMPORTANT - CONTINUOUS STORYTELLING**:
+   - NEVER start with disconnected events or sudden jumps
+   - ALWAYS begin from where the previous scene ended
+   - If player says "I examine the scroll" → Start with them picking it up, feeling its texture, unrolling it slowly
+   - If player says "I go to the market" → Show them walking there, what they see along the way, who they pass
+   - Think like a movie camera following the character - show EVERYTHING in between, not just the result
+   - Example: Player says "I train" → DON'T say "You trained and got stronger" → INSTEAD show them finding a spot, starting the movements, feeling the strain, the sweat, the breakthrough moment
+
 1. **FLOWING NARRATIVE**: Every scene must flow naturally from the previous action
    - NO sudden scene jumps or time skips without transition
    - Show the journey, not just the destination
@@ -118,6 +132,14 @@ CRITICAL NARRATIVE STYLE REQUIREMENTS:
 EXAMPLE OF GOOD NARRATIVE FLOW:
 ❌ BAD: "You practiced the technique. You got stronger."
 ✅ GOOD: "Under the pale moonlight filtering through bamboo leaves, you retreated to the secluded grove behind the outer disciples' quarters. The night air was crisp, carrying the scent of pine and distant incense from the main hall. You recalled Senior Brother Zhang's movements—the way his feet pivoted, how his waist twisted to generate explosive force, the precise angle of his fist at impact. Your first attempt was clumsy, your stance too wide, but you persisted. Again and again, you threw the punch, feeling the burn in your shoulders, the strain in your legs. By the hundredth repetition, something clicked. Your fist cut through the air with a sharp whistle, and you felt a faint stirring of qi in your dantian—crude and unrefined, but undeniably there. A small smile crossed your lips. This was just the beginning."
+
+MORE EXAMPLES OF BAD VS GOOD:
+
+❌ BAD (Disconnected, jumping): "Malam itu, Desa Qingfeng diselimuti kabut. Tubuh Iblis Surgawi terbangun! Kamu mendapat gulungan."
+✅ GOOD (Flowing, immersive): "Malam itu, hujan deras mengguyur Desa Qingfeng tanpa henti. Kamu menggigil di bawah atap kuil tua yang hampir roboh, tubuhnya basah kuyup dan perutmu keroncongan. Sudah tiga hari kamu tidak makan. Di sudut kuil, kamu melihat sebuah gulungan kulit tua tergeletak di antara puing-puing. Dengan tangan gemetar, kamu meraihnya. Saat jarimu menyentuh gulungan itu, panas membakar menjalar dari telapak tanganmu, naik melalui lengan, dan meledak di dadamu. Kamu terjatuh, tubuhmu kejang. Dalam pikiranmu, ribuan gambar berkilauan. Ketika rasa sakit mereda, kamu terbaring terengah-engah, merasakan sesuatu berbeda dalam tubuhmu. Sesuatu yang kuat."
+
+❌ BAD (Just results): "You found a body. You got items. What do you do?"
+✅ GOOD (Show the process): "Your foot catches on something soft in the darkness. You stumble, catching yourself against the cold stone wall. Looking down, your eyes adjust to see a corpse—a young man in tattered robes, his face frozen in terror. Your heart pounds. Who was he? What killed him? With trembling hands, you kneel beside the body. His coin purse is still attached to his belt, surprisingly heavy. A scroll case peeks from his inner robe. The smell of death makes your stomach turn, but survival demands pragmatism. Do you take what you need and leave quickly, or search more thoroughly despite the risk?"
 
 CHARACTER CONTEXT:
 - Name: {character_name}
@@ -229,8 +251,25 @@ RESPONSE FORMAT (STRICT JSON):
   ],
   
   "is_death": false,
-  "death_cause": null
+  "death_cause": null,
+  
+  "golden_finger_awakened": false
 }
+
+GOLDEN FINGER AWAKENING DETECTION:
+- Set "golden_finger_awakened": true ONLY when the character's Golden Finger ability is FULLY activated and usable
+- This should happen during the awakening scenario when:
+  * The character has experienced the full awakening process
+  * They understand what their Golden Finger does
+  * They have successfully used or activated it for the first time
+  * The awakening is complete, not just beginning
+- Examples:
+  * System: When the system interface fully appears and gives first quest
+  * Grandpa in Ring: When grandpa speaks and acknowledges the character
+  * Copycat Eye: When they successfully copy their first technique
+  * Alchemy God Body: When they absorb their first poison/pill successfully
+- Do NOT set to true during the initial discovery or partial awakening
+- Once set to true, the player can use custom actions (not just guided choices)
 
 CRITICAL CONSTRAINTS:
 - narrative field must contain ONE rich, flowing scene (150-250 words)
@@ -636,9 +675,17 @@ Example of good narrative flow:
     }
   }
 
-  static async generateFate(characterName: string, gender?: string, language: 'en' | 'id' = 'en'): Promise<any> {
+  static async generateFate(
+    characterName: string, 
+    gender?: string, 
+    language: 'en' | 'id' = 'en',
+    spiritRoot?: string,
+    goldenFinger?: string
+  ): Promise<any> {
     const genderNote = gender ? `The character is ${gender.toLowerCase()}.` : 'The character can be any gender.';
     const languageInstruction = getLanguageInstruction(language);
+    const spiritRootNote = spiritRoot ? `The character has a ${spiritRoot} Spirit Root.` : '';
+    const goldenFingerNote = goldenFinger ? `The character will awaken the "${goldenFinger}" ability.` : '';
     
     const systemPrompt = `You are a Wuxia/Jianghu fate generator specializing in classical Chinese martial arts world storytelling. Generate origin stories set EXCLUSIVELY in ancient China's Jianghu (江湖) - the world of martial artists, sects, and cultivators.
 
@@ -647,7 +694,10 @@ ${languageInstruction}
 CRITICAL CHARACTER REQUIREMENTS:
 - The main character's name is EXACTLY "${characterName}" - DO NOT change or replace this name
 - ${genderNote}
+- ${spiritRootNote}
+- ${goldenFingerNote}
 - Use this exact name throughout the entire backstory
+- The backstory MUST incorporate and explain their spirit root and hint at their future golden finger ability
 - Other NPCs (family, enemies, masters) should have different Chinese names
 
 CRITICAL SETTING REQUIREMENTS - The story MUST include:
@@ -721,7 +771,22 @@ Rules for bonuses/penalties:
             model: 'deepseek-chat',
             messages: [
               { role: 'system', content: systemPrompt },
-              { role: 'user', content: `Generate a dramatic Jianghu origin story for a cultivator named "${characterName}". ${gender ? `The character is ${gender.toLowerCase()}.` : ''} The story must be set in ancient China's martial world (Jianghu/江湖) with Chinese names, Chinese locations, and authentic Wuxia elements. Make it tragic, full of potential for greatness, and ready for a journey of cultivation and martial arts mastery. IMPORTANT: The main character must be called "${characterName}" throughout the entire story - do not change this name.
+              { role: 'user', content: `Generate a dramatic Jianghu origin story for a cultivator named "${characterName}". 
+              
+Character Details:
+- Name: ${characterName}
+- Gender: ${gender || 'Not specified'}
+- Spirit Root: ${spiritRoot || 'Not specified'}
+- Future Golden Finger: ${goldenFinger || 'Not specified'}
+
+The story must be set in ancient China's martial world (Jianghu/江湖) with Chinese names, Chinese locations, and authentic Wuxia elements. 
+
+IMPORTANT REQUIREMENTS:
+1. The backstory MUST explain or hint at why they have a ${spiritRoot} Spirit Root
+2. The backstory MUST foreshadow or set up their future "${goldenFinger}" ability (without explicitly revealing it)
+3. Make it tragic, full of potential for greatness, and ready for a journey of cultivation
+4. Use the name "${characterName}" throughout - do not change this name
+5. Incorporate their spirit root into their origin story naturally
 
 ${languageInstruction}` }
             ],

@@ -10,7 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { LogOut, User, Loader2 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { notify } from '@/lib/notifications';
 import { trackGameEvent } from '@/lib/analytics';
 import { perf } from '@/lib/performance';
 
@@ -22,7 +22,6 @@ const Index = () => {
   const [savedCharacterId, setSavedCharacterId] = useState<string | null>(null);
   const { user, loading, signOut } = useAuth();
   const navigate = useNavigate();
-  const { toast } = useToast();
 
   // Track session start
   useEffect(() => {
@@ -201,18 +200,11 @@ const Index = () => {
         
         console.log('=== OLD CHARACTER DELETED SUCCESSFULLY ===');
         
-        toast({
-          title: "Previous Character Deleted",
-          description: "Starting fresh with a new character.",
-        });
+        notify.success('Previous Character Deleted', 'Starting fresh with a new character.');
       } catch (error) {
         console.error('=== ERROR DELETING OLD CHARACTER ===');
         console.error(error);
-        toast({
-          title: "Warning",
-          description: "Could not delete old character data. Continuing anyway.",
-          variant: "destructive",
-        });
+        notify.warning('Warning', 'Could not delete old character data. Continuing anyway.');
       }
     }
     
@@ -248,10 +240,7 @@ const Index = () => {
     setCharacter(null);
     setSavedCharacterId(null);
     setGamePhase('title');
-    toast({
-      title: "Farewell, Cultivator",
-      description: "Your progress has been saved."
-    });
+    notify.success('Farewell, Cultivator', 'Your progress has been saved.');
   };
 
   if (loading) {

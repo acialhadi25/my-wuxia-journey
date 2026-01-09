@@ -1,6 +1,6 @@
 import { Character, getRarityColor, getRankColor } from '@/types/game';
 import { cn } from '@/lib/utils';
-import { Heart, Zap, Calendar, Mountain, Sparkles, X, Swords, Scroll, Package } from 'lucide-react';
+import { Heart, Zap, Calendar, Mountain, Sparkles, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -120,71 +120,17 @@ export function StatusPanel({ character, isOpen, onClose }: StatusPanelProps) {
             </div>
           </div>
 
-          {/* Techniques */}
-          <div className="space-y-2">
-            <h4 className="text-sm font-display text-muted-foreground flex items-center gap-1">
-              <Swords className="w-4 h-4" /> Techniques ({character.techniques?.length || 0})
-            </h4>
-            {character.techniques && character.techniques.length > 0 ? (
-              <div className="space-y-2">
-                {character.techniques.map((tech) => (
-                  <div key={tech.id} className="p-2 bg-muted/50 rounded border border-border">
-                    <div className="flex justify-between items-start">
-                      <span className={cn("font-medium text-sm", getRankColor(tech.rank))}>
-                        {tech.name}
-                      </span>
-                      <span className="text-xs text-muted-foreground">{tech.mastery}%</span>
-                    </div>
-                    <div className="h-1 bg-muted rounded-full mt-1 overflow-hidden">
-                      <div className="h-full bg-spirit" style={{ width: `${tech.mastery}%` }} />
-                    </div>
-                    <div className="flex gap-2 mt-1 text-xs text-muted-foreground">
-                      <span>{tech.rank}</span>
-                      {tech.element && <span>• {tech.element}</span>}
-                      <span>• {tech.qiCost} Qi</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground italic">No techniques learned yet.</p>
-            )}
-          </div>
-
-          {/* Inventory */}
-          <div className="space-y-2">
-            <h4 className="text-sm font-display text-muted-foreground flex items-center gap-1">
-              <Package className="w-4 h-4" /> Inventory ({character.inventory?.length || 0})
-            </h4>
-            {character.inventory && character.inventory.length > 0 ? (
-              <div className="space-y-1">
-                {character.inventory.map((item) => (
-                  <div key={item.id} className="p-2 bg-muted/50 rounded flex justify-between items-center">
-                    <div>
-                      <span className={cn("text-sm", getRarityColor(item.rarity))}>
-                        {item.name}
-                      </span>
-                      {item.equipped && <span className="text-xs text-gold ml-1">[E]</span>}
-                    </div>
-                    <span className="text-xs text-muted-foreground">x{item.quantity}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground italic">Inventory is empty.</p>
-            )}
-          </div>
-
           {/* Life Info */}
           <div className="space-y-2">
-            <h4 className="text-sm font-display text-muted-foreground">Life</h4>
-            <div className="flex items-center gap-2 text-sm p-2 bg-muted/50 rounded">
-              <Calendar className="w-4 h-4 text-muted-foreground" />
-              <span>Age: {character.stats.currentAge} / {character.stats.lifespan}</span>
+            <h4 className="text-sm font-display text-gold/80">Life</h4>
+            <div className="flex items-center gap-2 text-sm p-3 bg-white/5 rounded-lg border border-white/10">
+              <Calendar className="w-4 h-4 text-white/60" />
+              <span className="text-white/70">Age: </span>
+              <span className="text-white font-medium">{character.stats.currentAge} / {character.stats.lifespan}</span>
             </div>
-            <div className="text-sm p-2 bg-muted/50 rounded">
-              <span className="text-muted-foreground">Karma: </span>
-              <span className={character.karma >= 0 ? 'text-jade-glow' : 'text-blood'}>
+            <div className="text-sm p-3 bg-white/5 rounded-lg border border-white/10">
+              <span className="text-white/70">Karma: </span>
+              <span className={cn("font-medium", character.karma >= 0 ? 'text-jade-glow' : 'text-blood')}>
                 {character.karma >= 0 ? '+' : ''}{character.karma}
               </span>
             </div>
@@ -192,26 +138,26 @@ export function StatusPanel({ character, isOpen, onClose }: StatusPanelProps) {
 
           {/* Golden Finger */}
           <div className="space-y-2">
-            <h4 className="text-sm font-display text-muted-foreground">Golden Finger</h4>
+            <h4 className="text-sm font-display text-gold/80">Golden Finger</h4>
             <div className="p-3 bg-gold/10 border border-gold/20 rounded-lg">
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-lg">{character.goldenFinger.icon}</span>
                 <span className="font-display text-gold">{character.goldenFinger.name}</span>
               </div>
-              <p className="text-xs text-muted-foreground">{character.goldenFinger.effect}</p>
+              <p className="text-xs text-white/60">{character.goldenFinger.effect}</p>
             </div>
           </div>
 
           {/* Spirit Root */}
           <div className="space-y-2">
-            <h4 className="text-sm font-display text-muted-foreground">Spirit Root</h4>
+            <h4 className="text-sm font-display text-gold/80">Spirit Root</h4>
             <div className={cn(
               "p-3 rounded-lg border",
               character.spiritRoot === 'Trash' 
                 ? 'bg-blood/10 border-blood/20' 
                 : 'bg-jade/10 border-jade/20'
             )}>
-              <span className={character.spiritRoot === 'Trash' ? 'text-blood' : 'text-jade-glow'}>
+              <span className={cn("font-display", character.spiritRoot === 'Trash' ? 'text-blood' : 'text-jade-glow')}>
                 {character.spiritRoot} Root
               </span>
             </div>

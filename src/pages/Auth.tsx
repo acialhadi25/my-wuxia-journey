@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useToast } from '@/hooks/use-toast';
+import { notify } from '@/lib/notifications';
 import { Sword, Mail, Lock, User, ArrowLeft, Loader2 } from 'lucide-react';
 import { z } from 'zod';
 
@@ -20,7 +20,6 @@ export default function Auth() {
   
   const { signIn, signUp } = useAuth();
   const navigate = useNavigate();
-  const { toast } = useToast();
 
   const validateForm = (): boolean => {
     const newErrors: { email?: string; password?: string } = {};
@@ -51,56 +50,30 @@ export default function Auth() {
         const { error } = await signIn(email, password);
         if (error) {
           if (error.message.includes('Invalid login credentials')) {
-            toast({
-              title: "Login Failed",
-              description: "Invalid email or password. Please try again.",
-              variant: "destructive"
-            });
+            notify.error('Login Failed', 'Invalid email or password. Please try again.');
           } else {
-            toast({
-              title: "Login Failed",
-              description: error.message,
-              variant: "destructive"
-            });
+            notify.error('Login Failed', error.message);
           }
         } else {
-          toast({
-            title: "Welcome Back, Cultivator",
-            description: "Your journey continues..."
-          });
+          notify.success('Welcome Back, Cultivator', 'Your journey continues...');
           navigate('/');
         }
       } else {
         const { error } = await signUp(email, password, displayName || undefined);
         if (error) {
           if (error.message.includes('already registered')) {
-            toast({
-              title: "Account Exists",
-              description: "This email is already registered. Please login instead.",
-              variant: "destructive"
-            });
+            notify.error('Account Exists', 'This email is already registered. Please login instead.');
             setIsLogin(true);
           } else {
-            toast({
-              title: "Signup Failed",
-              description: error.message,
-              variant: "destructive"
-            });
+            notify.error('Signup Failed', error.message);
           }
         } else {
-          toast({
-            title: "Welcome to the Jianghu",
-            description: "Your cultivation journey begins now!"
-          });
+          notify.success('Welcome to the Jianghu', 'Your cultivation journey begins now!');
           navigate('/');
         }
       }
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "An unexpected error occurred. Please try again.",
-        variant: "destructive"
-      });
+      notify.error('Error', 'An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);
     }

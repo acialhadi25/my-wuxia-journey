@@ -4,12 +4,13 @@ import { StoryMessage } from './StoryMessage';
 import { ActionInput } from './ActionInput';
 import { StatusPanel } from './StatusPanel';
 import { CultivationPanel } from './CultivationPanel';
+import { InventoryPanel } from './InventoryPanel';
+import { TechniquesPanel } from './TechniquesPanel';
 import { Button } from '@/components/ui/button';
 import { MobileButton } from './MobileButton';
 import { SEO } from './SEO';
 import { NarrativeSkeleton } from './LoadingSkeleton';
-import { User, MapPin, Clock, LogOut, Sparkles, Save } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { User, MapPin, Clock, LogOut, Sparkles, Save, Swords, Package } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { saveToLocalStorage, autoSaveCharacter, saveLastChoices, loadLastChoices } from '@/services/autoSaveService';
@@ -58,6 +59,8 @@ export function GameScreen({ character, onUpdateCharacter, userId, savedCharacte
   const [choices, setChoices] = useState<GameChoice[]>([]);
   const [isStatusOpen, setIsStatusOpen] = useState(false);
   const [isCultivationOpen, setIsCultivationOpen] = useState(false);
+  const [isInventoryOpen, setIsInventoryOpen] = useState(false);
+  const [isTechniquesOpen, setIsTechniquesOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [currentLocation, setCurrentLocation] = useState('Starting Location');
@@ -65,7 +68,6 @@ export function GameScreen({ character, onUpdateCharacter, userId, savedCharacte
   const [currentChapter, setCurrentChapter] = useState(1);
   const [characterId, setCharacterId] = useState<string | null>(initialSavedId || null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { toast } = useToast();
   const { language } = useLanguage(); // Get current language
   const hasInitialized = useRef(false);
 
@@ -160,21 +162,60 @@ export function GameScreen({ character, onUpdateCharacter, userId, savedCharacte
         console.log('Generating awakening scenario...');
         const response = await generateNarrative(
           character,
-          `This is the awakening scenario - the very beginning of ${character.name}'s journey. 
+          `OPENING SCENE - This is the VERY FIRST moment of ${character.name}'s journey. You are the director/narrator.
 
-Character Background:
+CHARACTER CONTEXT:
 - Name: ${character.name}
 - Gender: ${character.visualTraits?.gender || 'Unknown'}
-- Origin: ${character.origin}
+- Origin Story: ${character.origin}
 - Golden Finger: ${character.goldenFinger.name} - ${character.goldenFinger.effect}
 
-Create an immersive awakening scene where ${character.name} discovers their ${character.goldenFinger.name}. This is a pivotal moment - describe:
-1. The circumstances of the awakening (dramatic and fitting to their origin)
-2. How the ${character.goldenFinger.name} manifests for the first time
-3. The immediate sensations and realizations ${character.name} experiences
-4. Set the stage for their journey in the Jianghu
+CRITICAL INSTRUCTIONS FOR OPENING SCENE:
+1. **START SLOWLY AND IMMERSIVELY**: Begin with the character in their current situation based on their origin
+   - If they're a beggar, start with them cold and hungry on the streets
+   - If they're a fallen noble, start with them in the ruins of their home
+   - If they're a slave, start with them working in harsh conditions
+   - Set the scene with sensory details: weather, sounds, smells, physical sensations
 
-Make it personal, dramatic, and memorable. This is the start of their legend.`,
+2. **BUILD THE MOMENT**: Show their current struggle or situation
+   - What are they doing right now?
+   - What are they feeling physically and emotionally?
+   - What immediate problem or challenge are they facing?
+   - Make the player FEEL their desperation or situation
+
+3. **NATURAL AWAKENING**: The Golden Finger awakens naturally from the situation
+   - Don't just say "it awakened" - show the PROCESS
+   - Describe the physical sensations step by step
+   - Show their confusion, fear, then realization
+   - Make it feel earned and dramatic
+
+4. **END WITH A CHOICE**: Leave them in a moment where they must decide what to do next
+   - Don't resolve everything immediately
+   - Create tension and uncertainty
+   - Give them agency to respond to this new power
+
+EXAMPLE STRUCTURE:
+"[Setting the scene with sensory details - 3-4 sentences]
+[Character's current struggle/situation - 2-3 sentences]
+[Something triggers the awakening - 1-2 sentences]
+[Physical sensations of awakening - 3-4 sentences]
+[Character's realization and immediate reaction - 2-3 sentences]
+[Current situation and what they can do now - 1-2 sentences]"
+
+EXAMPLE OF GOOD OPENING:
+"Malam itu, hujan deras mengguyur Desa Qingfeng tanpa henti. ${character.name} menggigil di bawah atap kuil tua yang hampir roboh, tubuhnya basah kuyup dan perutnya keroncongan. Sudah tiga hari ${character.visualTraits?.gender === 'Male' ? 'dia' : 'dia'} tidak makan, dan tubuhnya hampir tidak memiliki tenaga lagi. Di sudut kuil, ${character.visualTraits?.gender === 'Male' ? 'dia' : 'dia'} melihat sebuah gulungan kulit tua yang tergeletak di antara puing-puing. Dengan tangan gemetar, ${character.visualTraits?.gender === 'Male' ? 'dia' : 'dia'} meraihnya. Saat jari-jarinya menyentuh gulungan itu, sesuatu yang aneh terjadi. Panas yang membakar menjalar dari telapak tangannya, naik melalui lengan, dan meledak di dadanya. ${character.name} terjatuh, tubuhnya kejang, mulutnya terbuka dalam teriakan bisu. Dalam pikirannya, ribuan gambar berkilauan—teknik-teknik kuno, rahasia kultivasi, kekuatan yang tak terbayangkan. Ketika rasa sakit mereda, ${character.visualTraits?.gender === 'Male' ? 'dia' : 'dia'} terbaring terengah-engah, merasakan sesuatu yang berbeda dalam tubuhnya. Sesuatu yang kuat. Sesuatu yang berbahaya. Hujan masih turun deras di luar, tapi sekarang ${character.name} tidak lagi merasa kedinginan. ${character.visualTraits?.gender === 'Male' ? 'Dia' : 'Dia'} menatap tangannya yang gemetar, merasakan energi aneh mengalir di bawah kulitnya. Apa yang baru saja terjadi? Dan apa yang harus ${character.visualTraits?.gender === 'Male' ? 'dia' : 'dia'} lakukan sekarang?"
+
+IMPORTANT - AWAKENING PROGRESSION:
+- This is just the BEGINNING of the awakening process
+- DO NOT set "golden_finger_awakened": true yet
+- The awakening should take 2-4 player actions to complete
+- Guide the player through the awakening with suggested_actions
+- Only set "golden_finger_awakened": true when:
+  * They have fully experienced and understood their power
+  * They have successfully used it at least once
+  * The awakening process is complete, not just starting
+
+Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone for the entire journey. The player should feel like they're LIVING this moment, not just reading about it.`,
           charId,
           language // Pass language
         );
@@ -183,11 +224,7 @@ Make it personal, dramatic, and memorable. This is the start of their legend.`,
         
       } catch (error) {
         console.error('Failed to initialize game:', error);
-        toast({
-          title: "Connection Error",
-          description: "Failed to connect to the world. Please try again.",
-          variant: "destructive"
-        });
+        notify.error('Connection Error', 'Failed to connect to the world. Please try again.');
         
         // Fallback to static opening
         generateFallbackOpening();
@@ -327,6 +364,25 @@ Make it personal, dramatic, and memorable. This is the start of their legend.`,
     console.log('Qi:', updatedCharacter.qi, '/', updatedCharacter.maxQi);
     console.log('Cultivation:', updatedCharacter.cultivationProgress, '%');
     
+    // Check if Golden Finger awakened
+    if (response.golden_finger_awakened && !character.goldenFingerUnlocked) {
+      console.log('🌟 GOLDEN FINGER AWAKENED!');
+      updatedCharacter.goldenFingerUnlocked = true;
+      
+      // Show special notification
+      gameNotify.achievementUnlocked(`${character.goldenFinger.name} Awakened!`);
+      
+      // Add system message
+      const awakeningMessage: GameMessage = {
+        id: crypto.randomUUID(),
+        type: 'system',
+        content: `✨ ${character.goldenFinger.name} has fully awakened! You can now use custom actions to express yourself freely in the Jianghu.`,
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, awakeningMessage]);
+      await saveChatMessage(charId, 'system', awakeningMessage.content, 'system');
+    }
+    
     await updateCharacterInDatabase(charId, {
       stats: updatedCharacter.stats,
       health: updatedCharacter.health,
@@ -338,7 +394,8 @@ Make it personal, dramatic, and memorable. This is the start of their legend.`,
       cultivation_progress: updatedCharacter.cultivationProgress,
       breakthrough_ready: updatedCharacter.breakthroughReady,
       current_location: response.new_location || currentLocation,
-      time_elapsed: response.time_passed || timeElapsed
+      time_elapsed: response.time_passed || timeElapsed,
+      golden_finger_unlocked: updatedCharacter.goldenFingerUnlocked
     });
     
     console.log('✅ Character updates saved to database');
@@ -483,10 +540,7 @@ Make it personal, dramatic, and memorable. This is the start of their legend.`,
     setMessages(prev => [...prev, meditationMessage]);
     await saveChatMessage(characterId, 'system', meditationMessage.content, 'system');
 
-    toast({
-      title: "Meditation Complete",
-      description: `Qi +${qiGained}, Cultivation +${cultivationGained}%`
-    });
+    gameNotify.cultivationBreakthrough(`Qi +${qiGained}, Cultivation +${cultivationGained}%`);
   };
 
   const handleBreakthroughAttempt = async (success: boolean, newRealm?: CultivationRealm, damage?: number) => {
@@ -536,10 +590,7 @@ Make it personal, dramatic, and memorable. This is the start of their legend.`,
       setMessages(prev => [...prev, successMessage]);
       await saveChatMessage(characterId, 'system', successMessage.content, 'system');
 
-      toast({
-        title: "Breakthrough Success!",
-        description: `You have ascended to ${newRealm}!`,
-      });
+      gameNotify.cultivationBreakthrough(newRealm);
     } else {
       // Failure - Qi Deviation
       const healthLoss = damage || Math.floor(character.maxHealth * 0.3);
@@ -569,11 +620,7 @@ Make it personal, dramatic, and memorable. This is the start of their legend.`,
       setMessages(prev => [...prev, failMessage]);
       await saveChatMessage(characterId, 'system', failMessage.content, 'system');
 
-      toast({
-        title: "Breakthrough Failed",
-        description: "You suffered Qi Deviation!",
-        variant: "destructive"
-      });
+      notify.error('Breakthrough Failed', 'You suffered Qi Deviation!');
     }
   };
 
@@ -603,22 +650,48 @@ Make it personal, dramatic, and memorable. This is the start of their legend.`,
                 variant="ghost" 
                 size="icon" 
                 onClick={() => setIsStatusOpen(true)}
-              className="h-9 w-9 sm:h-10 sm:w-10 md:h-11 md:w-11 text-white/70 hover:text-gold hover:bg-white/10 touch-manipulation"
-            >
-              <User className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={() => setIsCultivationOpen(true)}
-              className={cn(
-                "h-9 w-9 sm:h-10 sm:w-10 md:h-11 md:w-11 hover:bg-white/10 touch-manipulation",
-                character.breakthroughReady ? 'text-gold animate-pulse' : 'text-white/70 hover:text-gold'
-              )}
-            >
-              <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
-            </Button>
-          </div>
+                className="h-9 w-9 sm:h-10 sm:w-10 md:h-11 md:w-11 text-white/70 hover:text-gold hover:bg-white/10 touch-manipulation"
+              >
+                <User className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => setIsCultivationOpen(true)}
+                className={cn(
+                  "h-9 w-9 sm:h-10 sm:w-10 md:h-11 md:w-11 hover:bg-white/10 touch-manipulation",
+                  character.breakthroughReady ? 'text-gold animate-pulse' : 'text-white/70 hover:text-gold'
+                )}
+              >
+                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => setIsTechniquesOpen(true)}
+                className="h-9 w-9 sm:h-10 sm:w-10 md:h-11 md:w-11 text-white/70 hover:text-purple-400 hover:bg-white/10 touch-manipulation relative"
+              >
+                <Swords className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
+                {character.techniques && character.techniques.length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 bg-purple-500 text-white text-[10px] sm:text-xs rounded-full flex items-center justify-center font-bold">
+                    {character.techniques.length}
+                  </span>
+                )}
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => setIsInventoryOpen(true)}
+                className="h-9 w-9 sm:h-10 sm:w-10 md:h-11 md:w-11 text-white/70 hover:text-blue-400 hover:bg-white/10 touch-manipulation relative"
+              >
+                <Package className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
+                {character.inventory && character.inventory.length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 bg-blue-500 text-white text-[10px] sm:text-xs rounded-full flex items-center justify-center font-bold">
+                    {character.inventory.length}
+                  </span>
+                )}
+              </Button>
+            </div>
           
           <div className="text-center flex-1 px-1 sm:px-2 min-w-0">
             <div className="flex items-center gap-1 sm:gap-2 justify-center flex-wrap">
@@ -678,6 +751,7 @@ Make it personal, dramatic, and memorable. This is the start of their legend.`,
             choices={choices}
             onAction={handleAction}
             isLoading={isLoading}
+            allowCustomAction={character.goldenFingerUnlocked ?? false}
           />
         </div>
       </div>
@@ -697,6 +771,14 @@ Make it personal, dramatic, and memorable. This is the start of their legend.`,
         onClose={() => setIsStatusOpen(false)}
       />
 
+      {/* Cultivation Panel Overlay */}
+      {isCultivationOpen && (
+        <div 
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40"
+          onClick={() => setIsCultivationOpen(false)}
+        />
+      )}
+
       {/* Cultivation Panel */}
       <CultivationPanel
         character={character}
@@ -704,6 +786,36 @@ Make it personal, dramatic, and memorable. This is the start of their legend.`,
         onClose={() => setIsCultivationOpen(false)}
         onMeditationComplete={handleMeditationComplete}
         onBreakthroughAttempt={handleBreakthroughAttempt}
+      />
+
+      {/* Inventory Panel Overlay */}
+      {isInventoryOpen && (
+        <div 
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40"
+          onClick={() => setIsInventoryOpen(false)}
+        />
+      )}
+
+      {/* Inventory Panel */}
+      <InventoryPanel
+        character={character}
+        isOpen={isInventoryOpen}
+        onClose={() => setIsInventoryOpen(false)}
+      />
+
+      {/* Techniques Panel Overlay */}
+      {isTechniquesOpen && (
+        <div 
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40"
+          onClick={() => setIsTechniquesOpen(false)}
+        />
+      )}
+
+      {/* Techniques Panel */}
+      <TechniquesPanel
+        character={character}
+        isOpen={isTechniquesOpen}
+        onClose={() => setIsTechniquesOpen(false)}
       />
       </div>
     </>

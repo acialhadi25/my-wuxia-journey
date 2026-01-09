@@ -13,7 +13,7 @@ import {
 import { saveTutorialProgress, loadTutorialProgress, saveToLocalStorage } from '@/services/autoSaveService';
 import { Loader2, Sparkles, MessageSquare, Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useToast } from '@/hooks/use-toast';
+import { notify } from '@/lib/notifications';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 type TutorialScreenProps = {
@@ -37,7 +37,6 @@ export function TutorialScreen({ character, onComplete, onBack }: TutorialScreen
   const [tutorialHistory, setTutorialHistory] = useState('');
   const [isAwakened, setIsAwakened] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const { toast } = useToast();
   const { language } = useLanguage();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
@@ -474,11 +473,7 @@ export function TutorialScreen({ character, onComplete, onBack }: TutorialScreen
       console.error('Tutorial generation error:', error);
       console.log('=== USING FALLBACK SYSTEM ===');
       
-      toast({
-        title: "Error",
-        description: "Failed to generate tutorial. Using contextual fallback.",
-        variant: "destructive",
-      });
+      notify.error('Error', 'Failed to generate tutorial. Using contextual fallback.');
       
       // Use contextual fallback narrative based on character's Golden Finger and origin
       const contextualNarrative = generateContextualFallbackNarrative(
@@ -630,10 +625,7 @@ export function TutorialScreen({ character, onComplete, onBack }: TutorialScreen
         }
         console.log('Tutorial messages transferred successfully');
         
-        toast({
-          title: "Golden Finger Awakened!",
-          description: "Your progress has been saved to database.",
-        });
+        notify.success('Golden Finger Awakened!', 'Your progress has been saved to database.');
       } catch (error) {
         console.error('Error saving tutorial completion:', error);
         
@@ -641,16 +633,10 @@ export function TutorialScreen({ character, onComplete, onBack }: TutorialScreen
         localStorage.setItem(`tutorial_completed_${character.id}`, 'true');
         localStorage.setItem(`golden_finger_unlocked_${character.id}`, 'true');
         
-        toast({
-          title: "Golden Finger Awakened!",
-          description: "Progress saved locally (database unavailable).",
-        });
+        notify.success('Golden Finger Awakened!', 'Progress saved locally (database unavailable).');
       }
     } else {
-      toast({
-        title: "Golden Finger Awakened!",
-        description: "Tutorial completed successfully.",
-      });
+      notify.success('Golden Finger Awakened!', 'Tutorial completed successfully.');
     }
     
     onComplete(updatedCharacter);
