@@ -1566,11 +1566,11 @@ ${languageInstruction}` }
           }
         } catch (parseError) {
           console.error('Parse error:', parseError, 'Content:', content);
-          // Fallback origin
+          // Fallback origin - use provided spirit root
           origin = {
             title: 'Wanderer of Lost Memories',
             description: 'You awaken beside the banks of the Yangtze River with no memory of your past. Only a jade pendant and fragments of martial arts techniques remain in your mind.',
-            spiritRoot: 'Trash',
+            spiritRoot: spiritRoot || 'Trash', // Use provided spirit root or default to Trash
             backstory: `${characterName} awakens at the shores of the Yangtze River (长江) with no memory of their past life. An old fisherman named Wang Bo found them unconscious among the reeds, with only a mysterious jade pendant bearing the symbol of a long-destroyed sect. Though the local medicine hall's physician declared their meridians completely blocked, sometimes in dreams, ${characterName} sees flashes of profound martial arts techniques and hears the voice of a stern master calling their name.`,
             startingLocation: 'Qingfeng Fishing Village (清风渔村)',
             bonuses: { luck: 3, intelligence: 2 },
@@ -1622,10 +1622,11 @@ ${languageInstruction}` }
     console.error('Last error:', lastError);
     
     // Return a fallback origin instead of throwing
+    // IMPORTANT: Use the provided spirit root, don't override it!
     return {
       title: 'Wanderer of Lost Memories',
       description: `${characterName} awakens beside the banks of the Yangtze River with no memory of the past. Only a jade pendant and fragments of martial arts techniques remain.`,
-      spiritRoot: 'Trash',
+      spiritRoot: spiritRoot || 'Trash', // Use provided spirit root or default to Trash
       backstory: `${characterName} awakens at the shores of the Yangtze River (长江) with no memory of ${gender === 'Female' ? 'her' : 'his'} past life. An old fisherman named Wang Bo found ${gender === 'Female' ? 'her' : 'him'} unconscious among the reeds, with only a mysterious jade pendant bearing the symbol of a long-destroyed sect. Though the local medicine hall's physician declared ${gender === 'Female' ? 'her' : 'his'} meridians completely blocked, sometimes in dreams, ${characterName} sees flashes of profound martial arts techniques and hears the voice of a stern master calling ${gender === 'Female' ? 'her' : 'his'} name.`,
       startingLocation: 'Qingfeng Fishing Village (清风渔村)',
       bonuses: { luck: 3, intelligence: 2 },

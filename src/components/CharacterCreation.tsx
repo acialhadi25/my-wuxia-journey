@@ -64,11 +64,12 @@ export function CharacterCreation({ onComplete, onBack, userId }: CharacterCreat
       
       // The service now provides a fallback, so this shouldn't happen often
       // But just in case, we still have a local fallback
+      // IMPORTANT: Use the selected spirit root, don't override it!
       const fallbackOrigins: GeneratedOrigin[] = [
         {
           title: "Broken Meridians",
           description: `Born into the prestigious Xiao family, but ${name}'s meridians were shattered at birth.`,
-          spiritRoot: "Trash",
+          spiritRoot: selectedSpiritRoot.element, // Use selected spirit root
           backstory: `${name} was born to the Xiao family, once destined for greatness. But fate is cruel - ${gender === 'Male' ? 'his' : 'her'} meridians were damaged during a difficult birth. Now ${gender === 'Male' ? 'his' : 'her'} fiancée seeks to break the engagement, and ${gender === 'Male' ? 'his' : 'her'} relatives look upon ${gender === 'Male' ? 'him' : 'her'} with disdain.`,
           startingLocation: "Xiao Family Estate",
           bonuses: { luck: 3, intelligence: 2 },
@@ -77,7 +78,7 @@ export function CharacterCreation({ onComplete, onBack, userId }: CharacterCreat
         {
           title: "Orphan Slave",
           description: `Sold as a child to the mines. Years of suffering have hardened ${name}'s will.`,
-          spiritRoot: "Earth",
+          spiritRoot: selectedSpiritRoot.element, // Use selected spirit root
           backstory: `${name} knows nothing but suffering. Sold to the mines as a child, ${gender === 'Male' ? 'he' : 'she'} has toiled for years. But ${gender === 'Male' ? 'he' : 'she'} possesses a mysterious jade pendant - ${gender === 'Male' ? 'his' : 'her'} only connection to ${gender === 'Male' ? 'his' : 'her'} unknown parents.`,
           startingLocation: "Black Iron Mines",
           bonuses: { strength: 3 },
@@ -86,7 +87,7 @@ export function CharacterCreation({ onComplete, onBack, userId }: CharacterCreat
         {
           title: "Fallen Noble",
           description: `${name}'s family was massacred by enemies. ${gender === 'Male' ? 'He' : 'She'} alone survived.`,
-          spiritRoot: "Fire",
+          spiritRoot: selectedSpiritRoot.element, // Use selected spirit root
           backstory: `${name} watched as enemies destroyed everything. ${gender === 'Male' ? 'His' : 'Her'} family, ${gender === 'Male' ? 'his' : 'her'} home, ${gender === 'Male' ? 'his' : 'her'} future - all taken in one bloody night. Only ${gender === 'Male' ? 'he' : 'she'} escaped, hidden by a loyal servant. Vengeance burns in ${gender === 'Male' ? 'his' : 'her'} heart.`,
           startingLocation: "Burning Ruins",
           bonuses: { intelligence: 2, charisma: 1 },
