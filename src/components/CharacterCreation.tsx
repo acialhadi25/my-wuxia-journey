@@ -11,7 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { validateCharacterName } from '@/lib/validation';
 import { trackGameEvent } from '@/lib/analytics';
-import { gameNotify } from '@/lib/notifications';
+import { notify } from '@/lib/notifications';
 import { perf } from '@/lib/performance';
 import { SEO } from '@/components/SEO';
 
@@ -37,12 +37,12 @@ export function CharacterCreation({ onComplete, onBack, userId }: CharacterCreat
     // Validate name
     const nameValidation = validateCharacterName(name);
     if (!nameValidation.success) {
-      gameNotify.error('Invalid Name', nameValidation.error);
+      notify.error('Invalid Name', nameValidation.error);
       return;
     }
 
     if (!gender) {
-      gameNotify.warning('Select Gender', 'The heavens must know your true nature.');
+      notify.warning('Select Gender', 'The heavens must know your true nature.');
       return;
     }
 
@@ -55,7 +55,7 @@ export function CharacterCreation({ onComplete, onBack, userId }: CharacterCreat
       perf.end('Generate Fate');
       
       setGeneratedOrigin(origin as GeneratedOrigin);
-      gameNotify.success('Fate Revealed', 'The heavens have spoken. Your destiny awaits.');
+      notify.success('Fate Revealed', 'The heavens have spoken. Your destiny awaits.');
     } catch (error) {
       console.error('Fate generation error:', error);
       perf.end('Generate Fate', false);
@@ -173,12 +173,12 @@ export function CharacterCreation({ onComplete, onBack, userId }: CharacterCreat
         selectedGoldenFinger?.name || 'Unknown'
       );
       
-      gameNotify.characterCreated(character.name);
+      notify.success('Character Created', `${character.name} has been saved to your journey.`);
       
       onComplete(savedCharacter);
     } catch (error) {
       console.error('Error saving character:', error);
-      gameNotify.saveError();
+      notify.error('Save Failed', 'Character created but not saved. You can continue playing.');
       
       // Still allow playing even if save fails
       onComplete(character);
