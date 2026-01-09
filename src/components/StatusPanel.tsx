@@ -5,6 +5,13 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ActiveEffectsDisplay } from './ActiveEffectsDisplay';
 import { RegenerationService } from '@/services/regenerationService';
+import { 
+  getKarmaLabel, 
+  getKarmaDescription, 
+  getKarmaBadgeColor, 
+  getKarmaAuraColor,
+  getKarmaIcon 
+} from '@/lib/karma';
 
 type StatusPanelProps = {
   character: Character;
@@ -196,11 +203,72 @@ export function StatusPanel({ character, isOpen, onClose }: StatusPanelProps) {
               <span className="text-white/70">Age: </span>
               <span className="text-white font-medium">{character.stats.currentAge} / {character.stats.lifespan}</span>
             </div>
+          </div>
+
+          {/* Karma - Enhanced Visual */}
+          <div className="space-y-2">
+            <h4 className="text-sm font-display text-gold/80">Karma & Alignment</h4>
+            
+            {/* Karma Value */}
             <div className="text-sm p-3 bg-white/5 rounded-lg border border-white/10">
-              <span className="text-white/70">Karma: </span>
-              <span className={cn("font-medium", character.karma >= 0 ? 'text-jade-glow' : 'text-blood')}>
-                {character.karma >= 0 ? '+' : ''}{character.karma}
-              </span>
+              <div className="flex items-center justify-between">
+                <span className="text-white/70">Karma: </span>
+                <span className={cn("font-medium text-lg", character.karma >= 0 ? 'text-jade-glow' : 'text-blood')}>
+                  {character.karma >= 0 ? '+' : ''}{character.karma}
+                </span>
+              </div>
+            </div>
+
+            {/* Karma Alignment Badge */}
+            <div className={cn(
+              "p-3 rounded-lg border relative overflow-hidden",
+              getKarmaBadgeColor(character.karma).bg,
+              getKarmaBadgeColor(character.karma).border
+            )}>
+              {/* Aura Effect */}
+              <div className={cn(
+                "absolute inset-0 opacity-20 bg-gradient-to-r blur-xl",
+                getKarmaAuraColor(character.karma)
+              )} />
+              
+              <div className="relative z-10">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-2xl">{getKarmaIcon(character.karma)}</span>
+                  <span className={cn("font-display text-lg", getKarmaBadgeColor(character.karma).text)}>
+                    {getKarmaLabel(character.karma)}
+                  </span>
+                </div>
+                <p className="text-xs text-white/70 leading-relaxed">
+                  {getKarmaDescription(character.karma)}
+                </p>
+              </div>
+            </div>
+
+            {/* Karma Bar */}
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs text-white/60">
+                <span>😈 Demonic</span>
+                <span>⚖️ Neutral</span>
+                <span>✨ Righteous</span>
+              </div>
+              <div className="h-2 bg-black/50 rounded-full overflow-hidden relative">
+                {/* Background gradient */}
+                <div className="absolute inset-0 bg-gradient-to-r from-purple-900 via-gray-500 to-jade" />
+                
+                {/* Karma indicator */}
+                <div 
+                  className="absolute top-0 bottom-0 w-1 bg-white shadow-lg shadow-white/50"
+                  style={{ 
+                    left: `${((character.karma + 150) / 300) * 100}%`,
+                    transform: 'translateX(-50%)'
+                  }}
+                />
+              </div>
+              <div className="flex justify-between text-xs text-white/40">
+                <span>-150</span>
+                <span>0</span>
+                <span>+150</span>
+              </div>
             </div>
           </div>
 

@@ -1,6 +1,6 @@
-import { Character, getRarityColor } from '@/types/game';
+import { Character, getRarityColor, InventoryItem } from '@/types/game';
 import { cn } from '@/lib/utils';
-import { X, Package, Search } from 'lucide-react';
+import { X, Package, Search, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
@@ -10,10 +10,12 @@ type InventoryPanelProps = {
   character: Character;
   isOpen: boolean;
   onClose: () => void;
+  onUseItem?: (item: InventoryItem) => void;
 };
 
-export function InventoryPanel({ character, isOpen, onClose }: InventoryPanelProps) {
+export function InventoryPanel({ character, isOpen, onClose, onUseItem }: InventoryPanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
 
   const filteredInventory = character.inventory?.filter(item =>
     item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -35,6 +37,17 @@ export function InventoryPanel({ character, isOpen, onClose }: InventoryPanelPro
     material: '📦',
     treasure: '💎',
     misc: '📜'
+  };
+
+  const isConsumable = (item: InventoryItem) => {
+    return item.type === 'pill' || (item.effects && Object.keys(item.effects).length > 0);
+  };
+
+  const handleUseItem = (item: InventoryItem) => {
+    if (onUseItem && isConsumable(item)) {
+      onUseItem(item);
+      setSelectedItem(null);
+    }
   };
 
   return (
@@ -86,7 +99,11 @@ export function InventoryPanel({ character, isOpen, onClose }: InventoryPanelPro
                     {items.map((item) => (
                       <div
                         key={item.id}
-                        className="p-3 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10 hover:border-white/20 transition-all cursor-pointer group"
+                        className={cn(
+                          "p-3 bg-white/5 hover:bg-white/10 rounded-lg border transition-all cursor-pointer group",
+                          selectedItem?.id === item.id ? "border-gold bg-gold/10" : "border-white/10 hover:border-white/20"
+                        )}
+                        onClick={() => setSelectedItem(item)}
                       >
                         <div className="flex justify-between items-start mb-2">
                           <div className="flex-1">
@@ -99,6 +116,11 @@ export function InventoryPanel({ character, isOpen, onClose }: InventoryPanelPro
                                   Equipped
                                 </span>
                               )}
+                              {isConsumable(item) && (
+                                <span className="text-xs px-2 py-0.5 bg-jade/20 text-jade rounded border border-jade/30">
+                                  Usable
+                                </span>
+                              )}
                             </div>
                             <div className="flex items-center gap-2 mt-1">
                               <span className={cn("text-xs px-2 py-0.5 rounded", getRarityColor(item.rarity), "bg-opacity-20")}>
@@ -107,6 +129,19 @@ export function InventoryPanel({ character, isOpen, onClose }: InventoryPanelPro
                               <span className="text-xs text-white/40">x{item.quantity}</span>
                             </div>
                           </div>
+                          {isConsumable(item) && selectedItem?.id === item.id && (
+                            <Button
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleUseItem(item);
+                              }}
+                              className="ml-2 bg-jade hover:bg-jade-glow text-black"
+                            >
+                              <Sparkles className="w-3 h-3 mr-1" />
+                              Use
+                            </Button>
+                          )}
                         </div>
                         <p className="text-xs text-white/60 leading-relaxed">
                           {item.description}

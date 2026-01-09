@@ -58,6 +58,10 @@ export const trackGameEvent = {
     trackEvent('Game', 'Item Obtained', `${rarity} - ${item}`);
   },
 
+  itemUsed: (item: string) => {
+    trackEvent('Game', 'Item Used', item);
+  },
+
   tutorialCompleted: () => {
     trackEvent('Game', 'Tutorial Completed');
   },

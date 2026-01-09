@@ -498,6 +498,107 @@ Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone
     }
   };
 
+  const handleUseItem = async (item: InventoryItem) => {
+    if (!characterId) return;
+
+    try {
+      // Show using item message
+      const useMessage: GameMessage = {
+        id: crypto.randomUUID(),
+        type: 'action',
+        content: `You use ${item.name}...`,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, useMessage]);
+
+      // Apply item effects
+      let updatedCharacter = { ...character };
+      
+      if (item.effects) {
+        // Apply stat changes from item effects
+        if (item.effects.health) {
+          updatedCharacter.health = Math.min(
+            updatedCharacter.health + (item.effects.health as number),
+            updatedCharacter.maxHealth
+          );
+        }
+        if (item.effects.qi) {
+          updatedCharacter.qi = Math.min(
+            updatedCharacter.qi + (item.effects.qi as number),
+            updatedCharacter.maxQi
+          );
+        }
+        if (item.effects.stamina) {
+          updatedCharacter.stamina = Math.min(
+            updatedCharacter.stamina + (item.effects.stamina as number),
+            updatedCharacter.maxStamina
+          );
+        }
+
+        // Add buff effects if specified
+        if (item.effects.buff) {
+          const buffEffect = item.effects.buff as any;
+          if (!updatedCharacter.activeEffects) {
+            updatedCharacter.activeEffects = [];
+          }
+          updatedCharacter.activeEffects.push({
+            id: crypto.randomUUID(),
+            name: buffEffect.name || `${item.name} Effect`,
+            type: 'buff',
+            description: buffEffect.description || `Effect from ${item.name}`,
+            duration: buffEffect.duration || 300,
+            startTime: Date.now(),
+            statModifiers: buffEffect.statModifiers,
+            regenModifiers: buffEffect.regenModifiers,
+          });
+        }
+      }
+
+      // Consume the item (reduce quantity)
+      updatedCharacter.inventory = updatedCharacter.inventory.map(invItem => {
+        if (invItem.id === item.id) {
+          return {
+            ...invItem,
+            quantity: invItem.quantity - 1
+          };
+        }
+        return invItem;
+      }).filter(invItem => invItem.quantity > 0); // Remove items with 0 quantity
+
+      // Update character state
+      onUpdateCharacter(updatedCharacter);
+
+      // Save to database
+      await updateCharacterInDatabase(characterId, {
+        health: Math.round(updatedCharacter.health),
+        qi: Math.round(updatedCharacter.qi),
+        stamina: Math.round(updatedCharacter.stamina),
+        inventory: updatedCharacter.inventory,
+        active_effects: updatedCharacter.activeEffects || []
+      });
+
+      // Show result message
+      const effectsText = Object.entries(item.effects || {})
+        .map(([key, value]) => `${key}: +${value}`)
+        .join(', ');
+      
+      const resultMessage: GameMessage = {
+        id: crypto.randomUUID(),
+        type: 'system',
+        content: `✨ ${item.name} consumed! ${effectsText}`,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, resultMessage]);
+
+      notify.success('Item Used', `${item.name} has been consumed`);
+      trackGameEvent.itemUsed(item.name);
+
+    } catch (error) {
+      console.error('Error using item:', error);
+      notify.error('Failed to use item', 'Please try again');
+    }
+  };
+
   const handleAction = useCallback(async (action: string) => {
     if (isLoading || !characterId) return;
     
@@ -868,6 +969,7 @@ Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone
         character={character}
         isOpen={isInventoryOpen}
         onClose={() => setIsInventoryOpen(false)}
+        onUseItem={handleUseItem}
       />
 
       {/* Techniques Panel Overlay */}
