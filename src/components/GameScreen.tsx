@@ -5,12 +5,19 @@ import { ActionInput } from './ActionInput';
 import { StatusPanel } from './StatusPanel';
 import { CultivationPanel } from './CultivationPanel';
 import { Button } from '@/components/ui/button';
+import { MobileButton } from './MobileButton';
+import { SEO } from './SEO';
+import { NarrativeSkeleton } from './LoadingSkeleton';
 import { User, MapPin, Clock, LogOut, Sparkles, Save } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { saveToLocalStorage, autoSaveCharacter, saveLastChoices, loadLastChoices } from '@/services/autoSaveService';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { validateAction } from '@/lib/validation';
+import { gameNotify, notify } from '@/lib/notifications';
+import { trackGameEvent, trackGameTiming } from '@/lib/analytics';
+import { perf } from '@/lib/performance';
 import {
   generateNarrative,
   saveCharacterToDatabase,
@@ -264,6 +271,8 @@ Make it personal, dramatic, and memorable. This is the start of their legend.`,
     if (response.new_techniques?.length) {
       for (const tech of response.new_techniques) {
         await addTechnique(charId, tech);
+        gameNotify.techniqueLearn(tech.name);
+        trackGameEvent.techniqueLearn(tech.name);
       }
       // Reload techniques
       const { techniques } = await loadCharacterWithDetails(charId);
@@ -284,6 +293,8 @@ Make it personal, dramatic, and memorable. This is the start of their legend.`,
     if (response.new_items?.length) {
       for (const item of response.new_items) {
         await addItem(charId, item);
+        gameNotify.itemObtained(item.name, item.rarity);
+        trackGameEvent.itemObtained(item.name, item.rarity);
       }
       const { inventory } = await loadCharacterWithDetails(charId);
       updatedCharacter.inventory = inventory;
@@ -363,24 +374,39 @@ Make it personal, dramatic, and memorable. This is the start of their legend.`,
     // Handle death
     if (response.is_death && userId) {
       await addToGraveyard(character, response.death_cause || 'Unknown', charId, userId);
-      toast({
-        title: "You Have Fallen",
-        description: response.death_cause || "Your journey ends here...",
-        variant: "destructive"
-      });
+      gameNotify.death(response.death_cause || 'Your journey ends here...');
+      trackGameEvent.errorOccurred('Character Death', response.death_cause || 'Unknown');
+    }
+    
+    // Notify cultivation breakthrough
+    if (response.new_realm) {
+      gameNotify.cultivationBreakthrough(response.new_realm);
+      trackGameEvent.cultivationBreakthrough(response.new_realm);
     }
   };
 
   const handleAction = useCallback(async (action: string) => {
     if (isLoading || !characterId) return;
     
+    // Validate action input
+    const validation = validateAction(action);
+    if (!validation.success) {
+      notify.error('Invalid Action', validation.error);
+      return;
+    }
+    
+    const sanitizedAction = validation.data!;
+    
     setIsLoading(true);
+    
+    // Track action
+    trackGameEvent.actionTaken(sanitizedAction);
     
     // Add user action to messages
     const userAction: GameMessage = {
       id: crypto.randomUUID(),
       type: 'action',
-      content: action,
+      content: sanitizedAction,
       timestamp: new Date(),
       speaker: character.name,
     };
@@ -388,28 +414,31 @@ Make it personal, dramatic, and memorable. This is the start of their legend.`,
     setChoices([]);
 
     // Save user message
-    await saveChatMessage(characterId, 'user', action, 'action', character.name);
+    await saveChatMessage(characterId, 'user', sanitizedAction, 'action', character.name);
 
     try {
-      const response = await generateNarrative(character, action, characterId, language); // Pass language
+      // Measure AI response time
+      perf.start('AI Response');
+      const response = await generateNarrative(character, sanitizedAction, characterId, language);
+      const responseTime = perf.end('AI Response');
+      
+      // Track response time
+      trackGameTiming.aiResponseTime(responseTime);
+      
       await processAIResponse(response, characterId);
     } catch (error) {
       console.error('Error generating narrative:', error);
+      perf.end('AI Response', false);
       
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       
+      // Track error
+      trackGameEvent.errorOccurred('AI Generation', errorMessage);
+      
       if (errorMessage.includes('Rate limit')) {
-        toast({
-          title: "Too Many Requests",
-          description: "Please wait a moment before taking another action.",
-          variant: "destructive"
-        });
+        notify.error('Too Many Requests', 'Please wait a moment before taking another action.');
       } else {
-        toast({
-          title: "The Heavens Are Silent",
-          description: "Failed to receive guidance from the world. Try again.",
-          variant: "destructive"
-        });
+        gameNotify.aiError();
       }
 
       // Provide fallback choices
@@ -420,7 +449,7 @@ Make it personal, dramatic, and memorable. This is the start of their legend.`,
     } finally {
       setIsLoading(false);
     }
-  }, [character, characterId, isLoading, currentChapter, currentLocation, timeElapsed]);
+  }, [character, characterId, isLoading, currentChapter, currentLocation, timeElapsed, language]);
 
   const handleMeditationComplete = async (qiGained: number, cultivationGained: number) => {
     if (!characterId) return;
@@ -549,26 +578,31 @@ Make it personal, dramatic, and memorable. This is the start of their legend.`,
   };
 
   return (
-    <div className="min-h-screen flex flex-col relative">
-      {/* Background Image */}
-      <div 
-        className="fixed inset-0 bg-cover bg-center bg-no-repeat"
-        style={{ 
-          backgroundImage: 'url(/assets/backgrounds/wuxia-serene.jpg)',
-        }}
+    <>
+      <SEO 
+        title="Game"
+        description={`${character.name}'s cultivation journey - ${character.realm} realm cultivator`}
       />
-      
-      {/* Dark Overlay */}
-      <div className="fixed inset-0 bg-gradient-to-b from-black/80 via-black/70 to-black/90" />
-      
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-black/60 backdrop-blur-md border-b border-white/10">
-        <div className="flex items-center justify-between p-2 sm:p-3 md:p-4 max-w-4xl mx-auto">
-          <div className="flex items-center gap-1">
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={() => setIsStatusOpen(true)}
+      <div className="min-h-screen flex flex-col relative">
+        {/* Background Image */}
+        <div 
+          className="fixed inset-0 bg-cover bg-center bg-no-repeat"
+          style={{ 
+            backgroundImage: 'url(/assets/backgrounds/wuxia-serene.jpg)',
+          }}
+        />
+        
+        {/* Dark Overlay */}
+        <div className="fixed inset-0 bg-gradient-to-b from-black/80 via-black/70 to-black/90" />
+        
+        {/* Header */}
+        <header className="sticky top-0 z-40 bg-black/60 backdrop-blur-md border-b border-white/10">
+          <div className="flex items-center justify-between p-2 sm:p-3 md:p-4 max-w-4xl mx-auto">
+            <div className="flex items-center gap-1">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => setIsStatusOpen(true)}
               className="h-9 w-9 sm:h-10 sm:w-10 md:h-11 md:w-11 text-white/70 hover:text-gold hover:bg-white/10 touch-manipulation"
             >
               <User className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
@@ -629,16 +663,7 @@ Make it personal, dramatic, and memorable. This is the start of their legend.`,
           />
         ))}
         
-        {isLoading && (
-          <div className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4 md:p-5 bg-black/40 backdrop-blur-md rounded-xl border border-white/10">
-            <div className="flex gap-1 sm:gap-1.5">
-              <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-gold rounded-full animate-pulse" />
-              <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-gold rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
-              <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-gold rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
-            </div>
-            <span className="text-xs sm:text-sm md:text-base text-white/50">The world responds...</span>
-          </div>
-        )}
+        {isLoading && <NarrativeSkeleton />}
       </div>
 
       {/* Bottom fade overlay */}
@@ -680,6 +705,7 @@ Make it personal, dramatic, and memorable. This is the start of their legend.`,
         onMeditationComplete={handleMeditationComplete}
         onBreakthroughAttempt={handleBreakthroughAttempt}
       />
-    </div>
+      </div>
+    </>
   );
 }
