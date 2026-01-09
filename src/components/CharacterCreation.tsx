@@ -9,6 +9,11 @@ import { DeepseekService } from '@/services/deepseekService';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { validateCharacterName } from '@/lib/validation';
+import { trackGameEvent } from '@/lib/analytics';
+import { gameNotify } from '@/lib/notifications';
+import { perf } from '@/lib/performance';
+import { SEO } from '@/components/SEO';
 
 type Step = 'name' | 'origin' | 'golden-finger' | 'confirm';
 
@@ -29,21 +34,15 @@ export function CharacterCreation({ onComplete, onBack, userId }: CharacterCreat
   const { language } = useLanguage(); // Get current language
 
   const rollFate = async () => {
-    if (!name.trim()) {
-      toast({
-        title: "Enter your name first",
-        description: "The heavens must know who seeks their fate.",
-        variant: "destructive",
-      });
+    // Validate name
+    const nameValidation = validateCharacterName(name);
+    if (!nameValidation.success) {
+      gameNotify.error('Invalid Name', nameValidation.error);
       return;
     }
 
     if (!gender) {
-      toast({
-        title: "Select your gender",
-        description: "The heavens must know your true nature.",
-        variant: "destructive",
-      });
+      gameNotify.warning('Select Gender', 'The heavens must know your true nature.');
       return;
     }
 
@@ -51,16 +50,15 @@ export function CharacterCreation({ onComplete, onBack, userId }: CharacterCreat
     setGeneratedOrigin(null);
 
     try {
-      const origin = await DeepseekService.generateFate(name, gender, language);
-      setGeneratedOrigin(origin as GeneratedOrigin);
+      perf.start('Generate Fate');
+      const origin = await DeepseekService.generateFate(nameValidation.data!, gender, language);
+      perf.end('Generate Fate');
       
-      // Show success message
-      toast({
-        title: "Fate Revealed",
-        description: "The heavens have spoken. Your destiny awaits.",
-      });
+      setGeneratedOrigin(origin as GeneratedOrigin);
+      gameNotify.success('Fate Revealed', 'The heavens have spoken. Your destiny awaits.');
     } catch (error) {
       console.error('Fate generation error:', error);
+      perf.end('Generate Fate', false);
       
       // The service now provides a fallback, so this shouldn't happen often
       // But just in case, we still have a local fallback
@@ -168,19 +166,19 @@ export function CharacterCreation({ onComplete, onBack, userId }: CharacterCreat
       // Update character with database ID
       const savedCharacter = { ...character, id: characterId };
       
-      toast({
-        title: "Character Created",
-        description: `${character.name} has been saved to your journey.`,
-      });
+      // Track character creation
+      trackGameEvent.characterCreated(
+        character.name,
+        generatedOrigin?.title || 'Unknown',
+        selectedGoldenFinger?.name || 'Unknown'
+      );
+      
+      gameNotify.characterCreated(character.name);
       
       onComplete(savedCharacter);
     } catch (error) {
       console.error('Error saving character:', error);
-      toast({
-        title: "Save Failed",
-        description: "Character created but not saved. You can continue playing.",
-        variant: "destructive"
-      });
+      gameNotify.saveError();
       
       // Still allow playing even if save fails
       onComplete(character);
@@ -215,11 +213,16 @@ export function CharacterCreation({ onComplete, onBack, userId }: CharacterCreat
   };
 
   return (
-    <div className="min-h-screen flex flex-col relative overflow-hidden">
-      {/* Background Image */}
-      <div 
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{ 
+    <>
+      <SEO 
+        title="Create Character"
+        description="Create your unique cultivator and begin your journey in the Jianghu. Choose your origin, golden finger, and forge your destiny."
+      />
+      <div className="min-h-screen flex flex-col relative overflow-hidden">
+        {/* Background Image */}
+        <div 
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+          style={{ 
           backgroundImage: 'url(/assets/backgrounds/wuxia-mystical.jpg)',
         }}
       />
@@ -505,6 +508,7 @@ export function CharacterCreation({ onComplete, onBack, userId }: CharacterCreat
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

@@ -4,12 +4,15 @@ import { TitleScreen } from '@/components/TitleScreen';
 import { CharacterCreation } from '@/components/CharacterCreation';
 import { TutorialScreen } from '@/components/TutorialScreen';
 import { GameScreen } from '@/components/GameScreen';
+import { SEO } from '@/components/SEO';
 import { Character } from '@/types/game';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { LogOut, User, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { trackGameEvent } from '@/lib/analytics';
+import { perf } from '@/lib/performance';
 
 type GamePhase = 'title' | 'creation' | 'tutorial' | 'playing' | 'loading-save';
 
@@ -21,6 +24,16 @@ const Index = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  // Track session start
+  useEffect(() => {
+    const sessionStart = Date.now();
+    
+    return () => {
+      const sessionDuration = Date.now() - sessionStart;
+      trackGameEvent.sessionDuration(sessionDuration);
+    };
+  }, []);
+
   // Check for existing character on login
   useEffect(() => {
     if (user && !loading) {
@@ -31,6 +44,8 @@ const Index = () => {
   const checkExistingCharacter = async () => {
     if (!user) return;
 
+    perf.start('Load Character');
+    
     try {
       const { data, error } = await supabase
         .from('characters')
@@ -97,9 +112,12 @@ const Index = () => {
         };
         setCharacter(loadedCharacter);
         setSavedCharacterId(data.id);
+        
+        perf.end('Load Character');
       }
     } catch (error) {
       console.error('Error checking for saved character:', error);
+      perf.end('Load Character', false);
     }
   };
 
@@ -248,9 +266,14 @@ const Index = () => {
   }
 
   return (
-    <div className="min-h-screen">
-      {/* User Status Bar - only show on title */}
-      {gamePhase === 'title' && (
+    <>
+      <SEO 
+        title="Home"
+        description="Embark on an AI-powered cultivation journey in the world of Wuxia. Create your character, unlock golden fingers, and forge your path to immortality."
+      />
+      <div className="min-h-screen">
+        {/* User Status Bar - only show on title */}
+        {gamePhase === 'title' && (
         <div className="absolute top-4 right-4 z-50">
           {user ? (
             <div className="flex items-center gap-2">
@@ -316,7 +339,8 @@ const Index = () => {
           onSignOut={handleSignOut}
         />
       )}
-    </div>
+      </div>
+    </>
   );
 };
 
