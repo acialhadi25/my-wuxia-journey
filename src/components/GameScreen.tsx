@@ -6,6 +6,7 @@ import { StatusPanel } from './StatusPanel';
 import { CultivationPanel } from './CultivationPanel';
 import { InventoryPanel } from './InventoryPanel';
 import { TechniquesPanel } from './TechniquesPanel';
+import { GoldenFingerPanel } from './GoldenFingerPanel';
 import { Button } from '@/components/ui/button';
 import { MobileButton } from './MobileButton';
 import { SEO } from './SEO';
@@ -63,6 +64,7 @@ export function GameScreen({ character, onUpdateCharacter, userId, savedCharacte
   const [isCultivationOpen, setIsCultivationOpen] = useState(false);
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
   const [isTechniquesOpen, setIsTechniquesOpen] = useState(false);
+  const [isGoldenFingerOpen, setIsGoldenFingerOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [currentLocation, setCurrentLocation] = useState('Starting Location');
@@ -745,6 +747,17 @@ Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone
                   </span>
                 )}
               </Button>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => setIsGoldenFingerOpen(true)}
+                className={cn(
+                  "h-9 w-9 sm:h-10 sm:w-10 md:h-11 md:w-11 hover:bg-white/10 touch-manipulation",
+                  character.goldenFingerUnlocked ? 'text-gold hover:text-gold animate-pulse' : 'text-white/40 hover:text-white/60'
+                )}
+              >
+                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 fill-current" />
+              </Button>
             </div>
           
           <div className="text-center flex-1 px-1 sm:px-2 min-w-0">
@@ -870,6 +883,17 @@ Remember: This is the FIRST scene. Make it immersive, dramatic, and set the tone
         character={character}
         isOpen={isTechniquesOpen}
         onClose={() => setIsTechniquesOpen(false)}
+      />
+
+      {/* Golden Finger Panel */}
+      <GoldenFingerPanel
+        character={character}
+        isOpen={isGoldenFingerOpen}
+        onClose={() => setIsGoldenFingerOpen(false)}
+        onUseAbility={(abilityId) => {
+          setIsGoldenFingerOpen(false);
+          handleAction(`Use Golden Finger ability: ${abilityId}`);
+        }}
       />
       </div>
     </>
