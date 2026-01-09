@@ -190,6 +190,9 @@ CHARACTER CONTEXT:
 - Location: {location}
 - Chapter: {chapter}
 
+ACTIVE EFFECTS:
+{active_effects}
+
 KNOWN TECHNIQUES:
 {techniques_list}
 
@@ -460,6 +463,178 @@ EFFECTS SYSTEM (NEW):
 - Use effects_to_add to apply new effects, effects_to_remove to remove them
 - Damage over time can kill the character if health reaches 0
 
+**CONTEXTUAL EFFECT REMOVAL (CRITICAL)**:
+Effects should be removed when the player takes appropriate action to counter them. ALWAYS check active effects and remove them contextually:
+
+1. **Hunger/Starvation Effects**:
+   - Remove when: Player eats food, consumes pills, finds sustenance
+   - Effect names: "Starving", "Hungry", "Malnourished", "Weak from Hunger"
+   - Action: Use effects_to_remove: ["Starving", "Hungry"] when player eats
+
+2. **Poison Effects**:
+   - Remove when: Player takes antidote pill, uses detox technique, cultivates to purge poison, uses Alchemy God Body ability
+   - Effect names: "Poisoned", "Toxic", "Venom", "Corrupted Blood"
+   - Action: Use effects_to_remove: ["Poisoned"] when player takes antidote or purges poison
+
+3. **Injury/Bleeding Effects**:
+   - Remove when: Player uses healing pill, receives medical treatment, rests, uses healing technique
+   - Effect names: "Bleeding", "Injured", "Wounded", "Broken Bones"
+   - Action: Use effects_to_remove: ["Bleeding", "Injured"] when player heals
+
+4. **Exhaustion/Fatigue Effects**:
+   - Remove when: Player rests, meditates, consumes energy pill, sleeps
+   - Effect names: "Exhausted", "Fatigued", "Tired", "Drained"
+   - Action: Use effects_to_remove: ["Exhausted"] when player rests
+
+5. **Qi Deviation Effects**:
+   - Remove when: Player stabilizes cultivation, receives master's help, uses special technique, meditates carefully
+   - Effect names: "Qi Deviation", "Unstable Qi", "Meridian Damage"
+   - Action: Use effects_to_remove: ["Qi Deviation"] when player stabilizes
+
+6. **Curse/Hex Effects**:
+   - Remove when: Player finds curse breaker, receives blessing, uses purification technique, visits temple
+   - Effect names: "Cursed", "Hexed", "Bad Luck Curse"
+   - Action: Use effects_to_remove: ["Cursed"] when curse is broken
+
+7. **Mental/Emotional Effects**:
+   - Remove when: Player overcomes fear, receives encouragement, meditates, achieves breakthrough
+   - Effect names: "Afraid", "Demoralized", "Confused", "Heart Demon"
+   - Action: Use effects_to_remove: ["Afraid"] when player overcomes fear
+
+8. **Environmental Effects**:
+   - Remove when: Player leaves environment, uses protection technique, adapts
+   - Effect names: "Freezing", "Burning", "Suffocating", "Altitude Sickness"
+   - Action: Use effects_to_remove: ["Freezing"] when player warms up
+
+**EFFECT REPLACEMENT**:
+When adding a new effect that counters an existing debuff, ALWAYS remove the debuff first:
+
+Example 1 - Eating when Starving:
+- Remove effects: "Starving", "Hungry"
+- Add effect: "Well Fed" (buff, 3600 sec, +2 strength, +1 agility, +1 HP regen, +2 stamina regen)
+
+Example 2 - Antidote for Poison:
+- Remove effects: "Poisoned", "Toxic"
+- Add effect: "Detoxified" (buff, 300 sec, +2 HP regen)
+
+Example 3 - Healing Pill for Injury:
+- Remove effects: "Bleeding", "Injured", "Wounded"
+- Add effect: "Rapid Healing" (buff, 600 sec, +5 HP regen)
+- Stat changes: +50 health
+
+Example 4 - Rest for Exhaustion:
+- Remove effects: "Exhausted", "Fatigued", "Tired"
+- Add effect: "Rested" (buff, 1800 sec, +3 stamina regen)
+
+**CRITICAL RULES FOR EFFECTS**:
+1. ALWAYS check character's active effects before responding
+2. ALWAYS remove debuffs when player takes appropriate counter-action
+3. NEVER let contradictory effects coexist (e.g., "Starving" + "Well Fed")
+4. When adding buff that counters debuff, remove debuff first
+5. Be logical - eating removes hunger, antidote removes poison, rest removes exhaustion
+6. Narrative should mention the effect removal ("The gnawing hunger fades as you eat...")
+7. System message should confirm removal ("Starving effect removed, Well Fed buff applied")
+
+**CRITICAL STATUS & CONTEXT-AWARE RESPONSES** (EXTREMELY IMPORTANT):
+
+When character has CRITICAL debuffs (poison, severe injury, qi deviation, starvation), you MUST:
+
+1. **VALIDATE PLAYER ACTIONS AGAINST CURRENT STATUS**:
+   - If poisoned → Reject frivolous actions (eating with friends, shopping, sightseeing)
+   - If severely injured → Reject strenuous activities (fighting, running, training)
+   - If starving → Reject energy-intensive actions (cultivation, combat)
+   - If qi deviation → Reject cultivation and technique usage
+
+2. **RESPOND WITH WARNINGS FOR INAPPROPRIATE ACTIONS**:
+
+When player attempts inappropriate action during critical status, respond with:
+- Narrative describing physical inability to perform action
+- Warning system message with ⚠️ CRITICAL prefix
+- Damage from attempting action (health/stamina loss)
+- Survival-focused action suggestions only
+
+Example scenarios:
+- Poisoned trying social activity → Warn about poison spreading, suggest antidote/detox/help
+- Starving trying training → Warn about weakness, suggest finding food/eating/hunting
+- Injured trying combat → Warn about wounds, suggest healing/retreat/negotiation
+
+3. **DAMAGE OVER TIME BASED ON SEVERITY**:
+
+Poison Severity Levels:
+- **Mild Poison**: -1 to -2 HP/sec, duration: 60-120 sec
+- **Moderate Poison**: -3 to -5 HP/sec, duration: 120-300 sec
+- **Severe Poison**: -6 to -10 HP/sec, duration: 300-600 sec
+- **Deadly Poison**: -15 to -30 HP/sec, duration: 60-180 sec (URGENT!)
+
+Apply appropriate damageOverTime when adding poison effects based on poison type and source.
+
+4. **PRIORITY ACTION SUGGESTIONS**:
+
+When character has critical status, suggested_actions MUST prioritize survival:
+
+**Poisoned**:
+- First priority: Antidote, detox technique, purge poison
+- Second priority: Slow poison spread, seek help
+- NEVER suggest: Social activities, training, exploration
+
+**Starving**:
+- First priority: Find food, eat from inventory
+- Second priority: Hunt, forage, beg
+- NEVER suggest: Combat, training, cultivation
+
+**Severely Injured**:
+- First priority: Healing pill, medical treatment
+- Second priority: Rest, retreat to safety
+- NEVER suggest: Combat, strenuous activity
+
+**Qi Deviation**:
+- First priority: Stabilize cultivation, seek master
+- Second priority: Meditation, rest
+- NEVER suggest: Cultivation, technique usage
+
+5. **ESCALATING CONSEQUENCES**:
+
+If player IGNORES warnings and continues inappropriate action:
+- Increase damage: stat_changes: {health: -20}
+- Worsen condition: Add more severe debuff
+- Narrative shows consequences: "You collapse, coughing blood..."
+- Risk of death: is_death: true if health reaches 0
+
+Example - Player ignores poison warning twice:
+- Narrative: Describe fatal consequences of ignoring poison (vision goes black, collapse, death)
+- System message: "💀 DEATH: Poison reached your heart. You ignored the warnings."
+- Stat changes: health: -999
+- is_death: true
+- death_cause: "Died from poison - ignored critical warnings and failed to seek treatment"
+
+6. **REALISTIC TIME PRESSURE**:
+
+Critical debuffs create URGENCY:
+- Deadly poison: "You have minutes before the poison reaches your heart!"
+- Severe bleeding: "You're losing blood fast—you'll pass out soon!"
+- Starvation: "Your body is consuming itself—you need food NOW!"
+- Qi deviation: "Your meridians are tearing apart—stabilize immediately!"
+
+Narrative should convey TIME PRESSURE and DANGER.
+
+7. **CONTEXT-APPROPRIATE CHOICES ONLY**:
+
+ALWAYS filter suggested_actions based on character status:
+- ✅ Poisoned → Suggest antidote, detox, help
+- ❌ Poisoned → DON'T suggest shopping, dating, sightseeing
+- ✅ Injured → Suggest healing, rest, retreat
+- ❌ Injured → DON'T suggest combat, training, running
+- ✅ Starving → Suggest food, hunting, foraging
+- ❌ Starving → DON'T suggest cultivation, combat, training
+
+**CRITICAL VALIDATION CHECKLIST**:
+Before generating suggested_actions, ask yourself:
+1. Does character have critical debuff?
+2. Is this action physically possible in their condition?
+3. Would this action worsen their condition?
+4. Are there more urgent survival actions?
+5. If yes to 1-4, REJECT the action and suggest survival actions instead
+
 REALM BREAKTHROUGH:
 When cultivation_progress >= 100 AND player attempts breakthrough:
 - Success: new_realm set, cultivation_progress reset to 0, max_qi/max_health increase
@@ -467,6 +642,15 @@ When cultivation_progress >= 100 AND player attempts breakthrough:
 - Realm order: Mortal → Qi Condensation → Foundation Establishment → Core Formation → Nascent Soul → Spirit Severing → Dao Seeking → Immortal Ascension
 
 RESPONSE FORMAT (STRICT JSON):
+
+CRITICAL JSON RULES:
+1. Response MUST be valid JSON - no trailing commas, no unescaped quotes
+2. All string values must use double quotes, not single quotes
+3. No comments allowed in JSON
+4. No undefined or null without quotes
+5. Arrays and objects must be properly closed
+6. Escape special characters in strings: \" for quotes, \n for newlines
+
 {
   "narrative": "Rich, flowing narrative (150-250 words) with vivid sensory details, smooth transitions, and immersive descriptions. Show the scene unfolding step by step, not just the result. Use Chinese web novel style with poetic language and dramatic flair.",
   "system_message": "Concise stat changes summary like 'Strength +2, Learned: Shadow Step, Cultivation +10'",
@@ -561,6 +745,7 @@ GOLDEN FINGER AWAKENING DETECTION:
 - Once set to true, the player can use custom actions (not just guided choices)
 
 CRITICAL CONSTRAINTS:
+- Response MUST be VALID JSON - check for trailing commas, unescaped quotes, proper brackets
 - narrative field must contain ONE rich, flowing scene (150-250 words)
 - Use vivid sensory details: sights, sounds, smells, textures, emotions
 - Show smooth transitions - no sudden jumps in time or location
@@ -571,6 +756,7 @@ CRITICAL CONSTRAINTS:
 - Do NOT include multiple scenarios or duplicate content  
 - Do NOT add explanatory text outside the JSON
 - Keep narrative focused but richly detailed
+- ALWAYS validate JSON before responding - no syntax errors allowed
 
 GOLDEN FINGER EFFECTS (apply appropriately):
 - The System: Occasionally give quest rewards (bonus stats, items)
@@ -614,6 +800,16 @@ export class DeepseekService {
     techniquesList: string,
     inventoryList: string
   ): string {
+    // Build active effects list
+    const activeEffectsList = character.activeEffects && character.activeEffects.length > 0
+      ? character.activeEffects.map(effect => {
+          const remaining = effect.isPermanent || effect.duration === -1 
+            ? 'Permanent' 
+            : `${Math.max(0, Math.round((effect.duration - (Date.now() - effect.startTime) / 1000)))}s remaining`;
+          return `- ${effect.name} (${effect.type}): ${effect.description} [${remaining}]`;
+        }).join('\n')
+      : 'None - Character is in normal condition';
+    
     return WUXIA_SYSTEM_PROMPT
       .replace('{character_name}', character.name || 'Unknown')
       .replace('{character_origin}', character.origin || 'Unknown')
@@ -635,6 +831,7 @@ export class DeepseekService {
       .replace('{karma}', character.karma?.toString() || '0')
       .replace('{location}', 'Starting Village') // Will be dynamic later
       .replace('{chapter}', '1') // Will be dynamic later
+      .replace('{active_effects}', activeEffectsList)
       .replace('{memory_context}', memoryContext)
       .replace('{npc_context}', npcContext)
       .replace('{techniques_list}', techniquesList)
@@ -866,6 +1063,18 @@ Example of good narrative flow:
           .replace(/[^}]*$/, '') // Remove everything after last }
           .trim();
         
+        // Additional JSON sanitization
+        // Fix common JSON errors from AI
+        jsonStr = jsonStr
+          .replace(/,(\s*[}\]])/g, '$1') // Remove trailing commas
+          .replace(/\n/g, ' ') // Replace newlines with spaces
+          .replace(/\r/g, '') // Remove carriage returns
+          .replace(/\t/g, ' ') // Replace tabs with spaces
+          .replace(/\s+/g, ' ') // Collapse multiple spaces
+          .replace(/"\s*:\s*"/g, '": "') // Normalize key-value spacing
+          .replace(/,\s*}/g, '}') // Remove comma before closing brace
+          .replace(/,\s*]/g, ']'); // Remove comma before closing bracket
+        
         // Handle truncated JSON - try to fix common issues
         if (jsonStr && !jsonStr.endsWith('}')) {
           // Try to find the last complete object
@@ -878,7 +1087,7 @@ Example of good narrative flow:
           }
         }
         
-        console.log('Cleaned JSON string:', jsonStr);
+        console.log('Cleaned JSON string (first 500 chars):', jsonStr.substring(0, 500));
         
         if (jsonStr.startsWith('{') && jsonStr.endsWith('}')) {
           parsedResponse = JSON.parse(jsonStr);
@@ -906,38 +1115,107 @@ Example of good narrative flow:
         }
       } catch (parseError) {
         console.error('Failed to parse Deepseek response as JSON:', parseError);
-        console.log('Raw AI content:', aiContent);
+        console.log('Raw AI content (first 1000 chars):', aiContent?.substring(0, 1000));
+        console.log('Attempted to parse:', jsonStr?.substring(0, 500));
         
-        // Check if aiContent itself is already a JSON string
-        if (typeof aiContent === 'string' && aiContent.trim().startsWith('{')) {
-          try {
-            // Try parsing the entire content as JSON
-            const directParse = JSON.parse(aiContent);
-            if (directParse.narrative) {
-              console.log('Successfully parsed aiContent directly as JSON');
-              parsedResponse = directParse;
-              return parsedResponse;
+        // Try more aggressive JSON extraction
+        if (typeof aiContent === 'string') {
+          // Strategy: Find the largest valid JSON object
+          let bestJson = null;
+          let maxLength = 0;
+          
+          // Try to find all potential JSON objects
+          const matches = aiContent.matchAll(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g);
+          for (const match of matches) {
+            try {
+              const testJson = JSON.parse(match[0]);
+              if (testJson.narrative && match[0].length > maxLength) {
+                bestJson = testJson;
+                maxLength = match[0].length;
+              }
+            } catch (e) {
+              // Skip invalid JSON
             }
-          } catch (directParseError) {
-            console.log('Direct parse also failed');
+          }
+          
+          if (bestJson) {
+            console.log('Found valid JSON using aggressive extraction');
+            parsedResponse = bestJson;
+            return parsedResponse;
+          }
+          
+          // Try to extract narrative from malformed JSON
+          const narrativeMatch = aiContent.match(/"narrative"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+          const suggestedActionsMatch = aiContent.match(/"suggested_actions"\s*:\s*\[(.*?)\]/s);
+          
+          if (narrativeMatch) {
+            console.log('Extracted narrative from malformed JSON');
+            const narrative = narrativeMatch[1]
+              .replace(/\\n/g, '\n')
+              .replace(/\\"/g, '"')
+              .replace(/\\'/g, "'");
+            
+            // Try to extract suggested actions
+            let suggestedActions = [
+              { text: 'Continue exploring', type: 'action' },
+              { text: 'Rest and meditate', type: 'action' },
+              { text: 'Look for opportunities', type: 'action' }
+            ];
+            
+            if (suggestedActionsMatch) {
+              try {
+                const actionsStr = '[' + suggestedActionsMatch[1] + ']';
+                const parsedActions = JSON.parse(actionsStr);
+                if (Array.isArray(parsedActions) && parsedActions.length > 0) {
+                  suggestedActions = parsedActions;
+                }
+              } catch (e) {
+                console.log('Could not parse suggested actions');
+              }
+            }
+            
+            parsedResponse = {
+              narrative,
+              system_message: null,
+              stat_changes: {},
+              cultivation_progress_change: 0,
+              new_techniques: [],
+              technique_mastery_changes: [],
+              new_items: [],
+              items_consumed: [],
+              npc_updates: [],
+              new_location: null,
+              time_passed: null,
+              event_to_remember: null,
+              suggested_actions: suggestedActions,
+              is_death: false
+            };
+            
+            return parsedResponse;
           }
         }
         
-        // Fallback to basic narrative response
-        // Extract just the text if it looks like JSON
-        let narrativeText = aiContent || 'The world responds to your action, but the heavens remain silent...';
+        // Final fallback to basic narrative response
+        let narrativeText = 'The world responds to your action, but the story continues...';
         
-        // If aiContent looks like JSON, try to extract narrative field
-        if (typeof narrativeText === 'string' && narrativeText.includes('"narrative"')) {
-          const narrativeMatch = narrativeText.match(/"narrative"\s*:\s*"([^"]+)"/);
-          if (narrativeMatch) {
-            narrativeText = narrativeMatch[1];
+        // Try to extract any readable text
+        if (typeof aiContent === 'string') {
+          // Remove JSON syntax and extract readable text
+          const cleanText = aiContent
+            .replace(/[{}[\]"]/g, '')
+            .replace(/narrative\s*:\s*/i, '')
+            .replace(/suggested_actions\s*:\s*/i, '')
+            .split(/(?:stat_changes|system_message|cultivation)/)[0]
+            .trim();
+          
+          if (cleanText && cleanText.length > 20) {
+            narrativeText = cleanText.substring(0, 500);
           }
         }
         
         parsedResponse = {
           narrative: narrativeText,
-          system_message: null,
+          system_message: 'AI response parsing failed - using fallback',
           stat_changes: {},
           cultivation_progress_change: 0,
           new_techniques: [],

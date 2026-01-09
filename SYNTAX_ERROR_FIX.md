@@ -1,90 +1,80 @@
 # Syntax Error Fix - deepseekService.ts
 
 ## Problem
+Application failed to load with error:
+```
+TypeError: "You are the World Simulator..." is not a function
+at deepseekService.ts:604:2
+```
 
-```
-× Expected ';', '}' or <eof>
-╭─[src/services/deepseekService.ts:390:1]
-stat_changes: {qi: -30, stamina: -10}
-              ──────┬──────
-                    ╰── This is the expression part of an expression statement
-```
+The error was caused by code examples with triple backticks (```) inside template strings in the AI system prompt. The parser was treating the code inside the backticks as actual TypeScript code instead of string content.
 
 ## Root Cause
+In the **ESCALATING CONSEQUENCES** section (around line 604), there was a code example showing JSON-like structures with triple backticks:
 
-The combat example code in the AI prompt contained **raw JavaScript object syntax** inside a template string, which the TypeScript parser tried to interpret as actual code instead of a string.
-
-**Problem Code**:
-```typescript
-const WUXIA_SYSTEM_PROMPT = `
-...
-Turn 2 - Player Attacks:
-\`\`\`
-stat_changes: {qi: -30, stamina: -10}  // ❌ Parser thinks this is real code!
+```
+Example - Player ignores poison warning twice:
+```
+narrative: "..."
 system_message: "..."
-\`\`\`
-...
-`;
+stat_changes: {health: -999}
+is_death: true
+```
 ```
 
-The triple backticks inside the template literal confused the parser.
+This broke the template string parsing and caused the entire prompt to be treated as a function call.
 
 ## Solution
+Replaced the code block example with descriptive text format:
 
-Changed the combat example from code blocks to descriptive text:
+**Before:**
+```
+Example - Player ignores poison warning twice:
+```
+narrative: "Ignoring the burning agony..."
+system_message: "💀 DEATH: Poison reached your heart..."
+stat_changes: {health: -999}
+is_death: true
+death_cause: "Died from poison..."
+```
+```
 
-**Fixed Code**:
-```typescript
-const WUXIA_SYSTEM_PROMPT = `
-...
-Turn 2 - Player Attacks:
-- narrative: Describe technique activation, visual effects, impact
-- stat_changes: Apply Qi/Stamina costs (qi: -30, stamina: -10)
-- system_message: Brief summary of results
-- technique_mastery_changes: Increase mastery (+5)
-...
-`;
+**After:**
+```
+Example - Player ignores poison warning twice:
+- Narrative: Describe fatal consequences of ignoring poison (vision goes black, collapse, death)
+- System message: "💀 DEATH: Poison reached your heart. You ignored the warnings."
+- Stat changes: health: -999
+- is_death: true
+- death_cause: "Died from poison - ignored critical warnings and failed to seek treatment"
 ```
 
 ## Changes Made
-
-**File**: `src/services/deepseekService.ts`
-
-Replaced the **COMBAT EXAMPLE FLOW** section:
-- ❌ Removed: Code blocks with raw JavaScript syntax
-- ✅ Added: Descriptive bullet points explaining the flow
-- ✅ Kept: All the important information
-- ✅ Result: No syntax errors, AI still understands the format
+1. Removed triple backticks from ESCALATING CONSEQUENCES section (line 604)
+2. Converted code example to bullet-point descriptions
+3. Maintained all critical information (death mechanics, stat changes, messages)
+4. Cleared Vite cache to ensure clean build
+5. Verified no other triple backticks remain in the file
 
 ## Verification
+- ✅ TypeScript diagnostics: No errors
+- ✅ No triple backticks found in file
+- ✅ Vite cache cleared
+- ✅ Application ready to load
 
-```bash
-✅ TypeScript compilation: PASS
-✅ No syntax errors
-✅ No diagnostics found
-✅ AI prompt still complete and informative
-```
+## Files Modified
+- `src/services/deepseekService.ts` (lines 604-615)
 
-## Why This Happened
+## Next Steps
+1. Restart dev server: `npm run dev`
+2. Test application loads without errors
+3. Verify AI understands critical status validation
+4. Test poison damage over time
+5. Test action rejection for inappropriate actions during critical status
+6. Test escalating consequences when warnings are ignored
 
-When you put code examples inside template literals:
-1. TypeScript parser tries to interpret them
-2. Triple backticks (```) inside template strings can cause issues
-3. Object syntax without proper context confuses the parser
-
-## Best Practice
-
-For code examples in template strings:
-- Use descriptive text instead of raw code
-- If you need code examples, escape them properly
-- Or use string concatenation instead of template literals
-
-## Status
-
-✅ **FIXED** - Syntax error resolved
-✅ **VERIFIED** - TypeScript compilation passes
-✅ **TESTED** - No diagnostics found
-
----
-
-**Next Step**: Restart dev server and test the application
+## Related Issues Fixed
+- TASK 12: Critical Status Validation implementation
+- TASK 11: Contextual Effect Removal
+- TASK 10: Enhanced JSON Parsing
+- Previous syntax errors from code examples in template strings
